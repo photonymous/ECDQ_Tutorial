@@ -1,0 +1,1669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dither and ECDQ synchronization: an interactive tutorial</title>
+<style>
+:root{
+  --bg:#0d1015; --panel:#151922; --panel2:#1b202b; --edge:#28303e;
+  --ink:#dbe2ee; --dim:#8b97ac; --faint:#5b6678;
+  --blue:#5aa9e6; --green:#4ec9a7; --amber:#e8a33d; --red:#e8636f;
+  --violet:#a68bea; --grid:#232b39;
+  --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1000px;margin:0 auto;padding:0 22px 120px}
+header{padding:64px 0 30px;border-bottom:1px solid var(--edge);margin-bottom:38px}
+h1{font-size:34px;line-height:1.2;margin:0 0 14px;letter-spacing:-.02em;font-weight:650}
+h1 .sub{display:block;font-size:17px;font-weight:400;color:var(--dim);margin-top:12px;letter-spacing:0}
+h2{font-size:24px;margin:66px 0 6px;letter-spacing:-.01em;font-weight:640;scroll-margin-top:20px}
+h2 .num{color:var(--faint);font:600 14px/1 var(--mono);display:block;margin-bottom:9px;letter-spacing:.14em}
+h3{font-size:17px;margin:34px 0 8px;font-weight:620;color:var(--ink)}
+p{margin:14px 0;color:#c4cddb}
+a{color:var(--blue)}
+code,.m{font-family:var(--mono);font-size:.9em;color:var(--green);background:rgba(78,201,167,.09);
+  padding:1px 5px;border-radius:4px;border:1px solid rgba(78,201,167,.16);overflow-wrap:anywhere}
+.lead{font-size:17.5px;color:#cdd7e4}
+ul{color:#c4cddb;padding-left:22px} li{margin:7px 0}
+.tldr{background:var(--panel);border:1px solid var(--edge);border-left:3px solid var(--violet);
+  border-radius:8px;padding:16px 20px;margin:26px 0}
+.tldr p{margin:8px 0}
+.note{border-left:3px solid var(--faint);padding:2px 0 2px 16px;color:var(--dim);font-size:15px;margin:20px 0}
+.key{background:rgba(166,139,234,.08);border:1px solid rgba(166,139,234,.28);border-radius:8px;
+  padding:14px 18px;margin:22px 0}
+.key b{color:var(--violet)}
+
+/* figures */
+.fig{background:var(--panel);border:1px solid var(--edge);border-radius:10px;margin:26px 0;overflow:hidden}
+.fig-head{padding:12px 18px;border-bottom:1px solid var(--edge);background:var(--panel2);
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.fig-head .tag{font:600 11px/1 var(--mono);color:var(--faint);letter-spacing:.12em}
+.fig-head .ttl{font-weight:600;font-size:15px}
+.fig-body{padding:16px 18px 18px}
+.cvhost{width:100%}
+canvas{display:block;width:100%}
+.ctls{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;margin:0 0 14px;
+  font-size:13.5px;color:var(--dim)}
+.ctl{display:flex;align-items:center;gap:9px}
+.ctl label{white-space:nowrap}
+.ctl input[type=range]{width:132px;accent-color:var(--blue);vertical-align:middle}
+.ctl output{font-family:var(--mono);color:var(--ink);min-width:46px;font-size:13px}
+select,button{
+  background:var(--panel2);color:var(--ink);border:1px solid var(--edge);
+  border-radius:6px;padding:5px 10px;font:inherit;font-size:13.5px;cursor:pointer}
+button:hover,select:hover{border-color:var(--faint)}
+button:active{background:#222836}
+button.on{background:rgba(90,169,230,.16);border-color:var(--blue);color:#cde6fb}
+.chk{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+.chk input{accent-color:var(--green);width:15px;height:15px;cursor:pointer}
+.chk.off{opacity:.42;cursor:not-allowed}
+.seg{display:inline-flex;border:1px solid var(--edge);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:5px 12px}
+.seg button+button{border-left:1px solid var(--edge)}
+
+.readout{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.rd{background:var(--panel2);border:1px solid var(--edge);border-radius:6px;padding:7px 11px;min-width:96px}
+.rd .k{font-size:10.5px;letter-spacing:.09em;color:var(--faint);text-transform:uppercase}
+.rd .v{font-family:var(--mono);font-size:15px;margin-top:2px}
+.rd.good .v{color:var(--green)} .rd.bad .v{color:var(--red)} .rd.hi .v{color:var(--amber)}
+
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;color:var(--dim);margin-top:12px}
+.legend i{display:inline-block;width:17px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+svg.diagram{width:100%;height:auto;display:block}
+/* font only: a fill rule here would override the per-element fill attributes */
+svg text{font-family:var(--mono)}
+
+table{border-collapse:collapse;width:100%;margin:20px 0;font-size:14px}
+th,td{border-bottom:1px solid var(--edge);padding:8px 10px;text-align:left}
+th{color:var(--dim);font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+td.n{font-family:var(--mono);text-align:right}
+footer{margin-top:80px;padding-top:26px;border-top:1px solid var(--edge);color:var(--faint);font-size:13.5px}
+footer a{color:var(--dim)}
+.eq{font-family:var(--mono);background:var(--panel);border:1px solid var(--edge);border-radius:8px;
+  padding:13px 18px;margin:18px 0;font-size:14.5px;color:#d6e3f2;overflow-x:auto}
+.eq .c{color:var(--faint)}
+.eq .g{color:var(--green)}
+.eq .a{color:var(--amber)}
+
+.diagram-scroll{overflow-x:auto;overscroll-behavior-inline:contain}
+.mobile-hint{display:none;color:var(--faint);font:10.5px/1.4 var(--mono);margin:0 0 6px}
+@media (max-width:600px){
+  .wrap{padding-left:14px;padding-right:14px}
+  header{padding-top:42px}
+  h1{font-size:29px}
+  .fig-body{padding:13px 12px 16px}
+  .ctls{gap:10px 14px}
+  .ctl{min-width:0;max-width:100%;flex-wrap:wrap}
+  .ctl select{max-width:100%}
+  #d6svg{min-width:760px}
+  .mobile-hint{display:block}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+<h1>Dither without the usual compression penalty
+<span class="sub">An interactive guide to ECDQ dither synchronization: why deliberate noise improves quantization, why a naive implementation compresses poorly, and how synchronized rounding avoids most of that cost.</span></h1>
+</header>
+
+<p class="lead">The main idea on this page fits in one line:</p>
+
+<div class="eq">p<sub>q</sub> = round( p / &Delta; <span class="g">+ d[n]</span> )</div>
+
+<p>Before rounding a <em>prediction</em>, add the same dither value used for the <em>real sample</em> at
+that position. The sections below explain why this keeps the two rounding operations synchronized.</p>
+
+<div class="tldr">
+<p><b>What ECDQ contributes.</b> An entropy-coded dithered quantizer (ECDQ) combines subtractive
+dither, prediction, and entropy coding. Shared dither makes quantization error independent of the
+input; applying that same dither when the prediction is rounded keeps accurate predictions cheap to
+encode. The tutorial develops those two ideas separately and then joins them in a closed prediction
+loop.</p>
+</div>
+
+<p><b>How to use this page.</b> Every figure is interactive and runs entirely in your browser using
+the equations presented here. Try the sliders and switches to see how the results change.</p>
+
+<div class="key"><b>Scope: these are toy models, not performance benchmarks.</b> Every plotted signal
+is synthetic and one-dimensional. More importantly, the main worked predictors are tiny, causal 1D
+examples: previous-sample prediction, a four-sample average, and a four-sample linear trend. They were
+chosen to expose the arithmetic, not because they represent strong predictive coding. The optional
+midpoint hierarchy is a toy non-causal 1D ordering included only for contrast.</div>
+
+<p>Non-causal and higher-dimensional applications can use samples on both sides of a target and much
+larger spatial or temporal neighbourhoods. Those stronger predictors can change the residual entropy,
+zero rate, dither penalty, and crossover point substantially. <b>The numerical tradeoffs shown here
+are therefore not portable.</b> The fundamental phenomena are: undithered quantization creates
+signal-dependent error; naive dither can desynchronize sample and prediction thresholds; ECDQ aligns
+those thresholds; and preserving information in the quiet zone can cost entropy.</p>
+
+<!-- =============================================================== -->
+<h2><span class="num">SECTION 1</span>Rounding is not a small, harmless error</h2>
+
+<p>A quantizer takes a continuous value and snaps it to the nearest point on a fixed grid. The grid
+spacing is <span class="m">&Delta;</span>, one least significant bit, or one LSB. Fewer quantization
+levels require fewer bits, and predictive coding can reduce the rate further when nearby samples are
+similar.</p>
+
+<p>The error is at most half an LSB, but its size alone is misleading because <b>the error is a
+deterministic function of the signal</b>. It is not noise. Feed the
+quantizer the same value twice and you get the same error twice. That makes the error correlated with
+the signal, and correlated error is <em>distortion</em>: it shows up as banding in images, harmonic
+tones in audio, and structured artifacts in numerical data.</p>
+
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 1</span><span class="ttl">The staircase and the sawtooth it leaves behind</span></div>
+  <div class="fig-body">
+    <div class="ctls">
+      <div class="ctl"><label>resolution setting</label><input type="range" id="d1-bits" min="2" max="7" step="1" value="3"><output id="d1-bits-o"></output></div>
+      <label class="chk"><input type="checkbox" id="d1-dither"> add subtractive dither</label>
+    </div>
+    <div class="cvhost" id="d1" data-h="330"></div>
+    <div class="legend">
+      <span><i style="background:var(--blue)"></i>true signal</span>
+      <span><i style="background:var(--ink)"></i>reconstruction</span>
+      <span><i style="background:var(--red)"></i>error (reconstruction minus truth)</span>
+      <span><i style="background:var(--grid)"></i>quantization grid</span>
+    </div>
+    <div class="readout">
+      <div class="rd"><div class="k">RMS error</div><div class="v" id="d1-rms">-</div></div>
+      <div class="rd"><div class="k">error explained by input</div><div class="v" id="d1-corr">-</div></div>
+    </div>
+  </div>
+</div>
+
+<p>With dither off, the red error trace is a clean sawtooth locked to the signal. The second readout
+shows that nearly all of the error is predictable from the input. In audio, that structure is heard as
+distortion; in repeated numerical calculations, it can accumulate as systematic bias.</p>
+
+<p>Turn dither on and the predictable fraction drops toward zero while the sawtooth becomes
+unstructured noise. The RMS error barely changes: both cases remain near
+<span class="m">&Delta;/sqrt(12)</span>. Subtractive dither changes the character of the error without
+increasing its power. Non-subtractive dither, in which the decoder cannot remove
+<span class="m">d</span>, leaves some of the deliberately added noise in the output. That distinction
+is often lost in the shorthand claim that dither simply adds noise.</p>
+
+<div class="note">There is one important exception. If the signal is much smaller than a step, the
+undithered error is small in RMS simply because the output is a constant zero and the error is just the
+signal itself. The RMS is low even though the signal has been completely lost. The next figure shows
+why RMS is not a useful measure in that case.</div>
+
+<!-- =============================================================== -->
+<h2><span class="num">SECTION 2</span>Dither: adding noise on purpose</h2>
+
+<p>Dither is one extra term inside the rounding, and one matching subtraction on the way out:</p>
+
+<div class="eq">
+q[n] = round( x[n] / &Delta; <span class="a">+ d[n]</span> ) <span class="c">// encode, with d[n] uniform on [-0.5, +0.5)</span><br>
+y[n] = ( q[n] <span class="a">- d[n]</span> ) &times; &Delta;  <span class="c">// decode, subtract the same d[n] back off</span>
+</div>
+
+<p>Because the same <span class="m">d[n]</span> is subtracted back off, this is called
+<b>subtractive dither</b>. It requires that the decoder can regenerate <span class="m">d[n]</span>
+exactly, which is easy: both sides run the same hash or PRNG on the sample index and a shared seed. No
+dither values are ever transmitted.</p>
+
+<p>Combining these equations gives
+<span class="m">y[n] = x[n] + e[n]&Delta;</span> where <span class="m">e[n]</span> is the rounding
+residue. With uniform
+<span class="m">d</span> the quantity <span class="m">e[n]</span> is <b>uniform on
+[-0.5, 0.5) and statistically independent of <span class="m">x[n]</span></b>, provided the quantizer
+does not clip. The error stops being a function of the signal and becomes genuine additive noise.
+Real digital dither uses a close finite approximation to this ideal distribution.</p>
+
+<h3>Information below the LSB survives</h3>
+
+<p>If a signal is smaller than one quantization step, plain rounding can send it to zero and erase it.
+Dithered rounding does not destroy it. The signal is still there, encoded in <em>how often</em> the
+output flips between levels, and averaging can reveal it beneath the noise.</p>
+
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 2</span><span class="ttl">A signal smaller than one LSB, recovered by averaging</span></div>
+  <div class="fig-body">
+    <div class="ctls">
+      <div class="ctl"><label>signal amplitude</label><input type="range" id="d2-amp" min="5" max="150" step="1" value="30"><output id="d2-amp-o"></output></div>
+      <div class="ctl"><label>averages</label><input type="range" id="d2-reps" min="0" max="9" step="1" value="6"><output id="d2-reps-o"></output></div>
+    </div>
+    <div class="cvhost" id="d2" data-h="250"></div>
+    <div class="legend">
+      <span><i style="background:var(--blue)"></i>true signal</span>
+      <span><i style="background:var(--red)"></i>no dither, averaged</span>
+      <span><i style="background:var(--green)"></i>subtractive dither, averaged</span>
+    </div>
+    <div class="readout">
+      <div class="rd bad"><div class="k">RMS err, no dither</div><div class="v" id="d2-e0">-</div></div>
+      <div class="rd good"><div class="k">RMS err, dithered</div><div class="v" id="d2-e1">-</div></div>
+    </div>
+  </div>
+</div>
+
+<p>Set the amplitude below 0.5 LSB. The undithered trace stays at zero no matter how many averages
+you take. The dithered trace, by contrast, converges to the true sine. Averaging cannot remove a
+repeatable, signal-shaped error, but it can reduce uncorrelated noise; dither converts the former into
+the latter.</p>
+
+<div class="note">This figure averages repeated, independently dithered measurements of the same
+waveform to make the principle obvious. A single encoded sequence contains only one such realization.
+In practice the averaging may come from time, nearby samples, or a matched operation such as a Fourier
+transform: energy at the sine's frequency adds coherently while the dither noise mostly cancels.</div>
+
+<h3>The error stops depending on the signal</h3>
+
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 3</span><span class="ttl">Error plotted against input value</span></div>
+  <div class="fig-body">
+    <div class="cvhost" id="d3" data-h="270" data-h-mobile="540" data-mobile-at="900"></div>
+    <div class="note" style="margin:12px 0 0">Each dot is one sample. Horizontal axis is the true input in LSB units,
+    vertical axis is the resulting error. The white line is the average error at that input value.</div>
+  </div>
+</div>
+
+<p>In the no-dither panel the error is a perfect sawtooth: knowing <span class="m">x</span> tells you
+the error exactly. In the subtractive-dither panel the cloud is uniform and the conditional mean is
+flat at zero: knowing <span class="m">x</span> tells you nothing. That is what “independent of the
+signal” looks like.</p>
+
+<h3>Distortion becomes a noise floor</h3>
+
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 4</span><span class="ttl">Spectrum of a quantized tone</span></div>
+  <div class="fig-body">
+    <div class="ctls">
+      <div class="ctl"><label>tone amplitude</label><input type="range" id="d4-amp" min="10" max="300" step="2" value="90"><output id="d4-amp-o"></output></div>
+    </div>
+    <div class="cvhost" id="d4" data-h="285"></div>
+    <div class="legend">
+      <span><i style="background:var(--red)"></i>no dither</span>
+      <span><i style="background:var(--green)"></i>subtractive dither</span>
+      <span><i style="background:var(--blue)"></i>true tone frequency</span>
+    </div>
+  </div>
+</div>
+
+<p>Without dither, the quantizer produces harmonics that were not present in the input, and a tone
+below half an LSB disappears entirely. With dither, the original peak remains in the right place above
+a flat noise floor. For moderate and large signals the total error energy is often similar, but its
+distribution is very different. For a very small signal the undithered RMS can be lower only because
+the output has collapsed to zero and lost the signal. This is also why dither is standard practice in
+digital audio.</p>
+
+<div class="note">If the decoder cannot subtract <span class="m">d</span>, some deliberate noise must
+remain in the result. A rectangular distribution can remove the average error but leaves its strength
+dependent on the signal. The usual triangular distribution removes that dependence too, at a total
+noise power three times the subtractive case (about 4.8 dB more). Subtractive dither avoids that extra
+cost whenever the encoder and decoder can regenerate the same <span class="m">d</span>.</div>
+
+<!-- =============================================================== -->
+<h2><span class="num">SECTION 3</span>Predictive coding and residual entropy</h2>
+
+<p>So far the focus has been signal quality. For compression, the useful fact is that many signals
+are locally correlated, so nearby samples tend to be similar. A predictive coder estimates each
+sample from values it has already decoded and stores only the correction.</p>
+
+<div class="eq">
+p        = predict( y[n-K] .. y[n-1] )   <span class="c">// a guess, from previously decoded values</span><br>
+p<sub>q</sub>       = round( p / &Delta; )             <span class="c">// the guess, on the integer grid</span><br>
+r[n]     = q[n] - p<sub>q</sub>                 <span class="c">// the residual: this is what gets stored</span>
+</div>
+
+<p>The decoder receives <span class="m">r[n]</span>, recomputes the identical prediction from its own
+copy of the already decoded values, and recovers
+<span class="m">q[n] = p<sub>q</sub> + r[n]</span>. Encoder and decoder run the same loop and stay in
+lockstep. This is a <b>closed loop</b> coder: the predictor must feed on <em>reconstructions</em>, never
+on originals, because reconstructions are all the decoder will have.</p>
+
+<p>This has two practical consequences.</p>
+
+<ul>
+<li><b>The residual histogram gives a useful first estimate of file size.</b> If each residual is
+treated independently, its ideal average cost is
+<span class="m">H = -&Sigma; p&middot;log<sub>2</sub>(p)</span> bits. This is not a hard lower bound for the
+whole stream: a compressor can do better when it finds predictable runs and patterns.</li>
+<li><b>Long runs of zeros are especially cheap.</b> A stream that is 85% zeros often costs well under
+one bit per sample. Replacing many of those zeros with a mix of -1, 0 and +1 usually makes both the
+histogram and the sequence harder to compress.</li>
+</ul>
+
+<!-- =============================================================== -->
+<h2><span class="num">SECTION 4</span>Why naive dither hurts compression</h2>
+
+<p>Dither provides the signal-quality benefits shown in Section 2, while predictive coding benefits
+from a residual stream dominated by zeros. A naive combination works against that goal.</p>
+
+<p>Consider a sample where the predictor is <em>perfect</em>: the prediction <span class="m">p</span>
+equals the true value <span class="m">x[n]</span> exactly. Without dither the residual is exactly
+zero, as it should be. With dither:</p>
+
+<div class="eq">
+q[n] = round( x[n]/&Delta; <span class="a">+ d[n]</span> )   <span class="c">// rounded with a random threshold offset</span><br>
+p<sub>q</sub>   = round( p/&Delta; )              <span class="c">// rounded on the plain grid</span><br>
+r[n] = q[n] - p<sub>q</sub>                <span class="c">// = 0 or &plusmn;1 at random, despite a perfect prediction</span>
+</div>
+
+<p>The dither shifts the sample's rounding threshold but not the prediction's, so the two often round
+to different integers. Across a sequence, even a <em>perfect</em> predictor lands on the wrong integer for
+about a quarter of samples, and a less accurate one does worse. Flat regions that once produced long
+runs of zero residuals now contain a mixture of -1, 0, and +1, increasing residual entropy even though
+the prediction itself is accurate.</p>
+
+<p>Some of that increase represents real sub-LSB information, but most of it comes from
+<em>desynchronizing two rounding operations that should agree</em>. Synchronizing them removes most of
+the extra cost.</p>
+
+<!-- =============================================================== -->
+<h2><span class="num">SECTION 5</span>Synchronized rounding on a number line</h2>
+
+<p>Figure 5 shows the central mechanism.</p>
+
+<p>Rounding partitions the number line into cells. <span class="m">round(v) = k</span> exactly when
+<span class="m">v</span> lies in the cell <span class="m">[k-0.5, k+0.5)</span>. Adding a dither
+<span class="m">d</span> before rounding is equivalent to <b>sliding every decision threshold left by
+<span class="m">d</span></b> while leaving the value in place.</p>
+
+<p>If the true value and the prediction use <b>the same set of thresholds</b>, nearby values usually
+land in the same cell and produce a zero residual. The absolute positions of the thresholds do not
+matter. Use the dither slider below to see this directly.</p>
+
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 5</span><span class="ttl">Two rounding operations, one set of thresholds</span>
+    <span style="margin-left:auto" class="seg">
+      <button id="d5-naive" class="on">naive</button><button id="d5-ecdq">ECDQ</button></span>
+  </div>
+  <div class="fig-body">
+    <div class="ctls">
+      <div class="ctl"><label>true value x/&Delta;</label><input type="range" id="d5-x" min="1.0" max="3.0" step="0.005" value="2.14"><output id="d5-x-o"></output></div>
+      <div class="ctl"><label>prediction p/&Delta;</label><input type="range" id="d5-p" min="1.0" max="3.0" step="0.005" value="2.02"><output id="d5-p-o"></output></div>
+      <div class="ctl"><label>dither d[n]</label><input type="range" id="d5-d" min="-0.499" max="0.499" step="0.002" value="0.13"><output id="d5-d-o"></output></div>
+      <button id="d5-sweep">sweep d</button>
+    </div>
+    <div class="cvhost" id="d5" data-h="232"></div>
+    <div class="readout">
+      <div class="rd"><div class="k">q[n]</div><div class="v" id="d5-q">-</div></div>
+      <div class="rd"><div class="k">p_q</div><div class="v" id="d5-pq">-</div></div>
+      <div class="rd" id="d5-rbox"><div class="k">residual r[n]</div><div class="v" id="d5-r">-</div></div>
+      <div class="rd"><div class="k">P(r &ne; 0) over all d</div><div class="v" id="d5-prob">-</div></div>
+      <div class="rd"><div class="k">|x - p| / &Delta;</div><div class="v" id="d5-gap">-</div></div>
+    </div>
+  </div>
+</div>
+
+<p>In <b>naive</b> mode the top lane's thresholds slide with <span class="m">d</span> while the bottom
+lane's remain fixed. Move the <em>prediction</em> toward the true value and watch
+<span class="m">P(r &ne; 0)</span>: it does not improve. Reducing the prediction error from
+0.4 LSB away to 0.05 LSB away changes that probability by nothing at all. It is pinned at whatever
+fraction of the dither's range happens to land outside the prediction's cell, which is a fact about
+where <span class="m">x</span> sits relative to a fixed threshold, and has no relationship to
+prediction quality. Push the prediction past a threshold and the probability changes abruptly; it can
+become very large, and in one direction it can reach 100 percent.</p>
+
+<p>Across a sequence, this leaves about a quarter of residuals nonzero even with a <em>perfect</em>
+predictor. The residual rate no longer tracks prediction quality, so improving the predictor does not
+help.</p>
+
+<p>Switch to <b>ECDQ</b> mode and both lanes receive the same threshold shift. Sweep <span class="m">d</span>
+through its whole range and the residual stays pinned at zero, except in a narrow band where a
+threshold happens to fall <em>between</em> the two values. Move the prediction slider again and compare
+the last two readouts, which now track each other digit for digit:</p>
+
+<div class="key"><b>P(r &ne; 0) = |x - p| / &Delta;</b>, exactly, for any prediction closer than one
+step. The probability of a nonzero residual depends only on prediction accuracy, not on the dither.</div>
+
+<p>There is a second part to ECDQ. The predictor should not receive
+<span class="m">q&middot;&Delta;</span>, which still contains the dither offset; it should be fed the
+de-dithered reconstruction <span class="m">y = (q - d)&middot;&Delta;</span>. Its remaining error is
+centered on zero, has a fixed noise power, and is unrelated to the signal. That makes it a more
+consistent predictor input and often reduces <span class="m">|x - p|</span>, which in turn reduces the
+number of nonzero residuals. ECDQ therefore has two parts:</p>
+
+<ul>
+<li><b>Inject:</b> add <span class="m">d[n]</span> before rounding the prediction. This aligns the
+thresholds and removes the synchronization penalty.</li>
+<li><b>De-dither:</b> predict from <span class="m">(q - d)&middot;&Delta;</span> rather than
+<span class="m">q&middot;&Delta;</span>. This improves the prediction and can eventually make the dithered
+stream smaller than the undithered one.</li>
+</ul>
+
+<p>These are often described as separate refinements, but some predictors get no benefit from
+injection unless de-dithering is also enabled.</p>
+
+<!-- =============================================================== -->
+<h2><span class="num">SECTION 6</span>A causal 1D toy prediction loop</h2>
+
+<p>The block diagram below shows the general ECDQ loop. The numerical example that follows it is
+deliberately causal and one-dimensional, with toy predictors whose behavior is easy to inspect. The
+diagram updates as you toggle the two ECDQ options, and the numbers beneath each node show the values
+at the current sample. Here <em>causal</em> means that a prediction uses only earlier 1D samples that
+the decoder has already reconstructed.</p>
+
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 6</span><span class="ttl">The ECDQ prediction loop</span></div>
+  <div class="fig-body">
+    <div class="ctls">
+      <label class="chk"><input type="checkbox" id="d6-dither" checked> subtractive dither on</label>
+      <label class="chk" id="d6-dd-l"><input type="checkbox" id="d6-dedither" checked> de-dither before predicting</label>
+      <label class="chk" id="d6-in-l"><input type="checkbox" id="d6-inject" checked> inject d[n] into prediction rounding</label>
+    </div>
+    <div class="mobile-hint">Swipe horizontally to follow the complete loop.</div>
+    <div class="diagram-scroll"><svg class="diagram" id="d6svg" viewBox="0 0 920 372" aria-label="ECDQ prediction loop block diagram"></svg></div>
+    <div class="note" style="margin-top:4px">Amber marks the three places the shared dither value
+    <span class="m">d[n]</span> is consumed. It is never stored or transmitted; both sides regenerate it
+    from the index and an agreed seed. Green marks the two ECDQ modifications.</div>
+  </div>
+</div>
+
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 7</span><span class="ttl">Stepping the loop over a synthetic signal</span></div>
+  <div class="fig-body">
+    <div class="ctls">
+      <div class="ctl"><label>bits</label><input type="range" id="d6-bits" min="6" max="12" step="1" value="8"><output id="d6-bits-o"></output></div>
+      <div class="ctl"><label>signal gain</label><input type="range" id="d6-gain" min="0.15" max="3" step="0.05" value="0.3"><output id="d6-gain-o"></output></div>
+      <div class="ctl"><label>predictor</label>
+        <select id="d6-pred">
+          <option value="avg4">4 tap causal average</option>
+          <option value="prev">previous sample</option>
+          <option value="lin">4 tap linear extrapolation</option>
+        </select></div>
+      <div class="ctl"><label>sample n</label><input type="range" id="d6-n" min="0" max="8191" step="1" value="1200"><output id="d6-n-o"></output></div>
+      <button id="d6-play">play</button>
+    </div>
+    <div class="cvhost" id="d6sig" data-h="270"></div>
+    <div class="legend">
+      <span><i style="background:var(--blue)"></i>true x</span>
+      <span><i style="background:var(--ink)"></i>reconstruction y</span>
+      <span><i style="background:var(--violet)"></i>prediction p</span>
+      <span><i style="background:var(--grid)"></i>quantization levels</span>
+    </div>
+    <div class="cvhost" id="d6res" data-h="112" data-h-mobile="190" style="margin-top:16px"></div>
+    <div class="readout">
+      <div class="rd"><div class="k">residual entropy</div><div class="v" id="d6-H">-</div></div>
+      <div class="rd"><div class="k">zeros in stream</div><div class="v" id="d6-z">-</div></div>
+      <div class="rd"><div class="k">vs no dither</div><div class="v" id="d6-pen">-</div></div>
+      <div class="rd"><div class="k">quiet zone |x| &lt; &Delta;</div><div class="v" id="d6-quiet">-</div></div>
+    </div>
+  </div>
+</div>
+
+<p>The bar chart compares five configurations on the same signal and bit depth. Only the two ECDQ
+options change.</p>
+
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 8</span><span class="ttl">Which half of ECDQ does the work</span></div>
+  <div class="fig-body">
+    <div class="cvhost" id="d6bars" data-h="230"></div>
+    <div class="note" style="margin:12px 0 0">Lower is better. Follow the settings in Fig 7; this chart
+    tracks the same bit depth, gain and predictor.</div>
+  </div>
+</div>
+
+<p>With the default four-tap predictor, naive dither has the highest entropy. De-dithering alone helps
+very little: it gives the predictor a more accurate input, but the result is still rounded against the
+wrong thresholds. Injection alone recovers most of the loss. Using both options brings ECDQ close to
+the no-dither baseline while retaining the signal-quality benefits from Section 2.</p>
+
+<h3>The two halves are not independent</h3>
+
+<p>Change the predictor in Fig 7 to <b>previous sample</b>. The naive, de-dither-only, and
+inject-only bars become <em>exactly</em> equal. This result follows from the arithmetic rather than a
+rendering error.</p>
+
+<p>A single-tap predictor reading reconstructions that have not been de-dithered computes
+<span class="m">p = y[n-1] = q[n-1]&middot;&Delta;</span>. Divide by <span class="m">&Delta;</span> and
+that is an <em>exact integer</em>. Adding a dither of magnitude below half a step to an integer and
+rounding returns the same integer. Injection therefore has no effect.</p>
+
+<div class="key"><b>Injection can only help when the prediction lands between levels.</b> What puts it
+between levels is de-dithering, which turns integer reconstructions into real valued ones. In the 4 tap
+case averaging four integers does some of that work too, which is why injection alone already helps
+there. The two ECDQ options are therefore coupled: injection aligns thresholds, while de-dithering
+allows the prediction to fall between quantization levels.</div>
+
+<p>The four-tap linear extrapolator fits a straight line to
+<span class="m">y[n-4]..y[n-1]</span> and evaluates it at <span class="m">n</span>. Its least-squares
+weights are equivalent to
+<span class="m">p = -0.5y[n-4] + 0.5y[n-2] + y[n-1]</span>; the coefficient of
+<span class="m">y[n-3]</span> cancels after the fit. Because these weights are fractional, the
+prediction can land between levels even without de-dithering, so injection alone can help. Using both
+options still gives the complete ECDQ loop: de-dithering removes past offsets and injection aligns the
+current rounding thresholds.</p>
+
+<!-- =============================================================== -->
+<h2><span class="num">SECTION 7</span>The quiet zone, and where dither starts winning</h2>
+
+<p>At coarse quantization, ECDQ approaches the undithered baseline but does not quite reach it. The
+remaining difference comes from the <b>quiet zone</b>.</p>
+
+<p>In nearly still regions, every sample is smaller than one step. Without dither, the samples round
+to zero, the predictor returns zero, and long runs of residuals cost almost nothing. Dither maps these
+near-zero samples to 0 or &plusmn;1, producing occasional nonzero residuals. Unlike the earlier
+synchronization problem, these residuals carry real sub-LSB detail that plain rounding discards.</p>
+
+<p>The cost depends on how much of the signal lies in the quiet zone, which shrinks quickly as
+resolution improves. At the same time, de-dithered reconstructions improve the prediction. At some bit
+depth, the second effect overtakes the first.</p>
+
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 9</span><span class="ttl">The crossover</span></div>
+  <div class="fig-body">
+    <div class="ctls">
+      <div class="ctl"><label>predictor</label>
+        <select id="d7-pred">
+          <option value="lin">4 tap linear extrapolation</option>
+          <option value="hier">hierarchical midpoint (1D toy)</option>
+          <option value="avg4">4 tap causal average</option>
+        </select></div>
+      <div class="ctl"><label>signal gain</label><input type="range" id="d7-gain" min="0.15" max="3" step="0.05" value="0.3"><output id="d7-gain-o"></output></div>
+      <label class="chk"><input type="checkbox" id="d7-naive"> show naive dither</label>
+    </div>
+    <div class="cvhost" id="d7" data-h="300"></div>
+    <div class="legend">
+      <span><i style="background:var(--blue)"></i>no dither</span>
+      <span><i style="background:var(--green)"></i>ECDQ dither</span>
+      <span><i style="background:var(--red)"></i>naive dither</span>
+      <span><i style="background:var(--faint)"></i>quiet zone %, right axis</span>
+    </div>
+<div class="readout">
+      <div class="rd"><div class="k">first crossover</div><div class="v" id="d7-cross">-</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="key"><b>Do not generalize the crossover value.</b> This graph's rates and crossing points
+belong to its exact synthetic 1D signal, gain, finite sample count, and toy predictor. A non-causal or
+higher-dimensional predictor can exploit a much richer neighbourhood, moving the curves and their
+crossings considerably. What survives those numerical changes is the competition itself: quiet-zone
+detail costs entropy at coarse resolution, while synchronized dither and de-dithered history let
+better prediction recover rate as resolution increases.</div>
+
+<p>At coarse resolution, undithered coding is cheaper because it turns quiet regions into long runs of
+zeros. After the first crossover, de-dithered reconstructions can improve prediction enough that the
+dithered stream becomes <em>smaller</em>, even though it retains more information.</p>
+
+<p>At higher bit depths the curves remain close. Which one is slightly lower depends mostly on the
+incidental alignment between the signal and the quantization grid. Moving the gain slider can reverse
+the ordering, showing that the two costs have effectively converged.</p>
+
+<h3>Why the two costs converge</h3>
+
+<p>As <span class="m">&Delta;</span> gets smaller, the predictor's ordinary error spans many increasingly
+fine quantization steps. The small change caused by randomized rounding then becomes tiny compared
+with the error already present in the prediction. Both residual histograms approach sampled versions
+of the same continuous prediction-error distribution, so their compression costs converge. Once they
+are very close, small details such as signal alignment and finite sample count can decide which curve
+is slightly lower.</p>
+
+<div class="note">Subtraction removes the added dither energy itself, but it cannot undo the rounding
+that happened while the dither was present. The remaining rounding noise is carried in past
+reconstructions and therefore enters later predictions. That is why a small difference can remain at
+finite resolution and why the two curves converge rather than coincide.</div>
+
+<!-- =============================================================== -->
+<h2><span class="num">SECTION 8</span>Summary</h2>
+
+<p>Uniform subtractive dither converts deterministic, signal-dependent quantization distortion into
+approximately additive, input-independent noise, provided the quantizer does not clip. This removes
+structured artifacts and preserves information below one quantization step, while keeping the error
+power bounded and predictable.</p>
+
+<p>In a predictive coder, applying dither only to the sample shifts its decision thresholds relative
+to those used for the prediction. Even an accurate predictor can then produce unnecessary nonzero
+residuals, increasing residual entropy. ECDQ avoids this mismatch by using the shared dither to
+synchronize both rounding operations and by forming predictions from de-dithered reconstructions.
+Prediction accuracy once again determines residual sparsity rather than the incidental dither value.</p>
+
+<p>A real rate tradeoff remains at coarse resolution. Dither preserves sub-LSB detail in quiet regions
+that undithered quantization would collapse to zero, so the added information can initially cost bits.
+As resolution and prediction quality improve, that quiet-zone penalty shrinks and the benefits of
+cleaner reconstructed history can offset it. The exact entropy curves and crossover points depend on
+the signal and predictor: these causal 1D toys illustrate the mechanisms, while stronger non-causal
+and higher-dimensional predictors will produce different numerical results.</p>
+
+<footer>
+<p><b>References and further reading.</b></p>
+<ul>
+<li>L. G. Roberts, “Picture Coding Using Pseudo-Random Noise,” <i>IRE Transactions on Information
+Theory</i>, 8(2), 145–154, 1962.</li>
+<li>L. Schuchman, “Dither Signals and Their Effect on Quantization Noise,” <i>IEEE Transactions on
+Communication Technology</i>, 12(4), 162–165, 1964.</li>
+<li>S. P. Lipshitz, R. A. Wannamaker, and J. Vanderkooy, “Quantization and Dither: A Theoretical
+Survey,” <i>Journal of the Audio Engineering Society</i>, 40(5), 355–375, 1992.</li>
+<li>R. Zamir and M. Feder, “Information Rates of Pre/Post-Filtered Dithered Quantizers,” <i>IEEE
+Transactions on Information Theory</i>, 42(5), 1340–1353, 1996.</li>
+<li>D. W. E. Schobben, R. A. Beuker, and W. Oomen, “Dither and Data Compression,” <i>IEEE
+Transactions on Signal Processing</i>, 45(8), 2097–2101, 1997.</li>
+<li>R. A. Wannamaker, <i>The Theory of Dithered Quantization</i>, Ph.D. thesis, University of
+Waterloo, 1997.</li>
+<li>R. Zamir, Y. Kochman, and U. Erez, “Achieving the Gaussian Rate-Distortion Function by
+Prediction,” <i>IEEE Transactions on Information Theory</i>, 54(7), 3354–3364, 2008.</li>
+</ul>
+<p>Every number on this page is computed in your browser from the equations and toy signals shown
+here. The page fetches no external data and uses no precomputed lookup tables.</p>
+</footer>
+
+</div>
+
+<script>
+"use strict";
+/* ============================ shared utilities ============================ */
+var C = {
+  blue:'#5aa9e6', green:'#4ec9a7', amber:'#e8a33d', red:'#e8636f',
+  violet:'#a68bea', ink:'#dbe2ee', dim:'#8b97ac', faint:'#5b6678',
+  grid:'#232b39', edge:'#28303e', panel:'#151922', panel2:'#1b202b'
+};
+var MONO = '12px ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+var VMAX = 127/128;
+
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function clamp(v,lo,hi){ return v<lo?lo:(v>hi?hi:v); }
+function entropy(sym){
+  var m = new Map(), i, v, H = 0, p;
+  for(i=0;i<sym.length;i++){ v=sym[i]; m.set(v,(m.get(v)||0)+1); }
+  m.forEach(function(c){ p=c/sym.length; H -= p*Math.log2(p); });
+  return H;
+}
+function fmt(v,n){ return (v<0?'':' ') + v.toFixed(n===undefined?3:n); }
+function $(id){ return document.getElementById(id); }
+
+/* canvas host: handles devicePixelRatio and resize */
+function makeCanvas(hostId, draw){
+  var host = $(hostId);
+  var cv = document.createElement('canvas');
+  host.appendChild(cv);
+  var ctx = cv.getContext('2d');
+  var w = 0, baseH = parseInt(host.dataset.h || '220', 10), h = baseH;
+  var mobileAt = parseInt(host.dataset.mobileAt || '520', 10);
+  function resize(){
+    var dpr = window.devicePixelRatio || 1;
+    var nw = Math.max(240, Math.floor(host.getBoundingClientRect().width));
+    var nh = (nw < mobileAt && host.dataset.hMobile) ? parseInt(host.dataset.hMobile,10) : baseH;
+    if(nw === w && nh === h) { render(); return; }
+    w = nw; h = nh;
+    cv.width = Math.floor(w*dpr); cv.height = Math.floor(h*dpr);
+    cv.style.width = w+'px'; cv.style.height = h+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    render();
+  }
+  function render(){
+    ctx.save(); ctx.setTransform(window.devicePixelRatio||1,0,0,window.devicePixelRatio||1,0,0);
+    ctx.clearRect(0,0,w,h); draw(ctx,w,h); ctx.restore();
+  }
+  if(window.ResizeObserver) new ResizeObserver(resize).observe(host);
+  else window.addEventListener('resize', resize);
+  requestAnimationFrame(resize);
+  return { render: render, resize: resize };
+}
+
+/* small plotting helpers */
+function frame(ctx, w, h, pad){
+  var L=pad[3], R=w-pad[1], T=pad[0], B=h-pad[2];
+  return { L:L, R:R, T:T, B:B, w:R-L, h:B-T };
+}
+function mapper(f, xd, yd){
+  return {
+    X: function(v){ return f.L + (v-xd[0])/(xd[1]-xd[0])*f.w; },
+    Y: function(v){ return f.B - (v-yd[0])/(yd[1]-yd[0])*f.h; }
+  };
+}
+function line(ctx, pts, color, width, dash){
+  if(pts.length<2) return;
+  ctx.save(); ctx.beginPath();
+  if(dash) ctx.setLineDash(dash);
+  ctx.strokeStyle=color; ctx.lineWidth=width||1.6;
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.moveTo(pts[0][0],pts[0][1]);
+  for(var i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.stroke(); ctx.restore();
+}
+function txt(ctx, s, x, y, color, align, font){
+  ctx.save(); ctx.font=font||MONO; ctx.fillStyle=color||C.dim;
+  ctx.textAlign=align||'left'; ctx.textBaseline='middle';
+  ctx.fillText(s,x,y); ctx.restore();
+}
+function hline(ctx, f, y, color, dash){
+  ctx.save(); ctx.beginPath(); if(dash) ctx.setLineDash(dash);
+  ctx.strokeStyle=color; ctx.lineWidth=1;
+  ctx.moveTo(f.L, Math.round(y)+0.5); ctx.lineTo(f.R, Math.round(y)+0.5);
+  ctx.stroke(); ctx.restore();
+}
+
+/* ============================ predictive quantization core ============================ */
+
+function demoSignal(N, gain){
+  var x = new Float64Array(N), n;
+  for(n=1;n<=N;n++){
+    x[n-1] = gain * ( 0.05*Math.sin(2*Math.PI*n/200)
+                    + 0.03*Math.sin(2*Math.PI*n/80)
+                    + 0.01*Math.sin(2*Math.PI*n/30) );
+  }
+  return x;
+}
+
+function predictFrom(y, n, kind){
+  if(n === 0) return 0;
+  if(kind === 'prev') return y[n-1];
+  if(kind === 'lin'){
+    if(n < 2) return y[n-1];
+    if(n < 4) return 2*y[n-1] - y[n-2];
+    /* Least-squares line through the previous four samples, evaluated one step ahead. */
+    var mean=(y[n-4]+y[n-3]+y[n-2]+y[n-1])/4;
+    var slope=(-1.5*y[n-4]-0.5*y[n-3]+0.5*y[n-2]+1.5*y[n-1])/5;
+    return mean+2.5*slope;
+  }
+  var K=4, s=0, c=0, i;
+  for(i=Math.max(0,n-K); i<n; i++){ s+=y[i]; c++; }
+  return s/c;
+}
+
+/* causal DPCM loop. o = {dither, dedither, inject, pred, seed} */
+function runCausal(x, bits, o){
+  var N=x.length, maxInt=Math.pow(2,bits-1)-1, step=VMAX/maxInt;
+  var rnd=mulberry32(o.seed||42), n;
+  var d=new Float64Array(N);
+  if(o.dither) for(n=0;n<N;n++) d[n]=rnd()-0.5;
+  var q=new Int32Array(N), pq=new Int32Array(N), r=new Int32Array(N);
+  var y=new Float64Array(N), pr=new Float64Array(N);
+  for(n=0;n<N;n++){
+    q[n]  = clamp(Math.round(clamp(x[n]/step,-maxInt,maxInt)+d[n]), -maxInt, maxInt);
+    var p = predictFrom(y, n, o.pred);
+    pr[n] = p;
+    pq[n] = clamp(Math.round(p/step + (o.inject ? d[n] : 0)), -maxInt, maxInt);
+    r[n]  = q[n] - pq[n];
+    y[n]  = ((pq[n]+r[n]) - (o.dedither ? d[n] : 0)) * step;
+  }
+  return { q:q, pq:pq, r:r, y:y, p:pr, d:d, step:step, maxInt:maxInt };
+}
+
+/* Hierarchical midpoint predictor used by the crossover figure.
+   Level 0 stores two raw values; each later level predicts the midpoint of two
+   already decoded neighbours (periodic). N must be a power of two. */
+function runHier(x, bits, o){
+  var N=x.length, maxInt=Math.pow(2,bits-1)-1, step=VMAX/maxInt;
+  var rnd=mulberry32(o.seed||42), n;
+  var d=new Float64Array(N);
+  if(o.dither) for(n=0;n<N;n++) d[n]=rnd()-0.5;
+  var q=new Int32Array(N);
+  for(n=0;n<N;n++) q[n]=clamp(Math.round(clamp(x[n]/step,-maxInt,maxInt)+d[n]),-maxInt,maxInt);
+  var y=new Float64Array(N), res=[], levels=Math.round(Math.log2(N)), level, i;
+  for(level=0; level<levels; level++){
+    var stride = N/Math.pow(2,level+1);
+    if(level === 0){
+      for(i=0;i<N;i+=stride){ y[i]=(q[i]-(o.dedither?d[i]:0))*step; res.push(q[i]); }
+    } else {
+      var s=stride, s2=2*s;
+      for(i=s;i<N;i+=s2){
+        var L=(i-s+N)%N, R=(i+s)%N;
+        var p=(y[L]+y[R])/2;
+        var pq=clamp(Math.round(p/step + (o.inject?d[i]:0)), -maxInt, maxInt);
+        var rr=q[i]-pq;
+        res.push(rr);
+        y[i]=((pq+rr)-(o.dedither?d[i]:0))*step;
+      }
+    }
+  }
+  return { res:res, step:step };
+}
+
+function quietFrac(x, step){
+  var c=0,i; for(i=0;i<x.length;i++) if(Math.abs(x[i])<step) c++;
+  return c/x.length;
+}
+
+/* ============================ FIG 1: staircase ============================ */
+(function(){
+  var bitsEl=$('d1-bits'), ditEl=$('d1-dither'), oBits=$('d1-bits-o');
+  var N=560;
+  function compute(){
+    var bits=+bitsEl.value, dith=ditEl.checked;
+    var maxInt=Math.pow(2,bits-1)-1, step=1/maxInt;
+    var rnd=mulberry32(9001);
+    var x=new Float64Array(N), y=new Float64Array(N), e=new Float64Array(N), n;
+    for(n=0;n<N;n++){
+      var t=n/N;
+      x[n]=0.86*Math.sin(2*Math.PI*t*1.5)*Math.exp(-0.4*t) + 0.06*Math.sin(2*Math.PI*t*9);
+      var d=dith?(rnd()-0.5):0;
+      var q=clamp(Math.round(clamp(x[n]/step,-maxInt,maxInt)+d),-maxInt,maxInt);
+      y[n]=(q-d)*step;
+      e[n]=y[n]-x[n];
+    }
+    return {x:x,y:y,e:e,step:step,maxInt:maxInt,bits:bits};
+  }
+  var cv=makeCanvas('d1', function(ctx,w,h){
+    var D=compute();
+    var split=Math.round(h*0.63);
+    var f1=frame(ctx,w,split,[12,52,6,10]);
+    var f2=frame(ctx,w,h,[split+16,52,20,10]);
+    var m1=mapper(f1,[0,N-1],[-1.05,1.05]);
+    // quantization grid
+    var k;
+    for(k=-D.maxInt;k<=D.maxInt;k++){
+      var lv=k*D.step; if(Math.abs(lv)>1.05) continue;
+      hline(ctx,f1,m1.Y(lv), k===0?C.edge:C.grid);
+    }
+    txt(ctx,'signal',f1.R+8,f1.T+8,C.faint,'left');
+    // reconstruction as steps
+    var pts=[],n;
+    for(n=0;n<N;n++){ pts.push([m1.X(n),m1.Y(D.y[n])]); }
+    line(ctx,pts,C.ink,1.2);
+    pts=[]; for(n=0;n<N;n++) pts.push([m1.X(n),m1.Y(D.x[n])]);
+    line(ctx,pts,C.blue,1.8);
+    // error panel
+    var em=Math.max(0.75*D.step, 1e-9);
+    var m2=mapper(f2,[0,N-1],[-em*1.15,em*1.15]);
+    hline(ctx,f2,m2.Y(0),C.edge);
+    hline(ctx,f2,m2.Y(D.step/2),C.grid,[3,3]);
+    hline(ctx,f2,m2.Y(-D.step/2),C.grid,[3,3]);
+    pts=[]; for(n=0;n<N;n++) pts.push([m2.X(n),m2.Y(clamp(D.e[n],-em*1.15,em*1.15))]);
+    line(ctx,pts,C.red,1.3);
+    txt(ctx,'error',f2.R+8,f2.T+8,C.faint,'left');
+    txt(ctx,'+Δ/2',f2.R+8,m2.Y(D.step/2),C.faint,'left','10px ui-monospace,monospace');
+    txt(ctx,'-Δ/2',f2.R+8,m2.Y(-D.step/2),C.faint,'left','10px ui-monospace,monospace');
+    // How much of the error is a function of the input? Plain linear correlation is
+    // useless here: the undithered error is a sawtooth, fully determined by x yet
+    // very nearly uncorrelated with it. Use the correlation ratio eta^2, conditioning
+    // on position within the quantization cell, which is the variable the sawtooth
+    // actually rides on and which stays meaningful at every bit depth.
+    var NB=24, bs=new Float64Array(NB), bc=new Float64Array(NB), n2, k2;
+    var mean=0, rms=0;
+    for(n2=0;n2<N;n2++){ mean+=D.e[n2]; rms+=D.e[n2]*D.e[n2]; }
+    mean/=N;
+    var tot=0;
+    for(n2=0;n2<N;n2++){
+      tot += (D.e[n2]-mean)*(D.e[n2]-mean);
+      var u = D.x[n2]/D.step; u -= Math.round(u);          // position in cell, [-0.5,0.5)
+      var b = Math.floor((u+0.5)*NB); if(b<0)b=0; if(b>=NB)b=NB-1;
+      bs[b]+=D.e[n2]; bc[b]++;
+    }
+    var expl=0;
+    for(k2=0;k2<NB;k2++) if(bc[k2]>0){ var mu=bs[k2]/bc[k2]; expl+=bc[k2]*(mu-mean)*(mu-mean); }
+    var eta = tot>0 ? clamp(expl/tot,0,1) : 0;
+    $('d1-rms').textContent=(Math.sqrt(rms/N)/D.step).toFixed(3)+' Δ';
+    var ce=$('d1-corr'); ce.textContent=(100*eta).toFixed(1)+'%';
+    ce.style.color = eta>0.5 ? C.red : C.green;
+    oBits.textContent=(2*D.maxInt+1)+' levels';
+  });
+  bitsEl.oninput=ditEl.onchange=cv.render;
+})();
+
+/* ==================== FIG 2: sub-LSB recovery by averaging ==================== */
+(function(){
+  var ampEl=$('d2-amp'), repEl=$('d2-reps');
+  var N=256, PER=64;
+  var cv=makeCanvas('d2', function(ctx,w,h){
+    var A=+ampEl.value/100;
+    var R=Math.pow(2,+repEl.value);
+    $('d2-amp-o').textContent=A.toFixed(2)+' LSB';
+    $('d2-reps-o').textContent=R;
+    var x=new Float64Array(N), a0=new Float64Array(N), a1=new Float64Array(N), n,rep;
+    for(n=0;n<N;n++) x[n]=A*Math.sin(2*Math.PI*n/PER);
+    for(n=0;n<N;n++) a0[n]=Math.round(x[n]);           // undithered: deterministic
+    var rnd=mulberry32(4242);
+    for(rep=0;rep<R;rep++){
+      for(n=0;n<N;n++){ var d=rnd()-0.5; a1[n]+=Math.round(x[n]+d)-d; }
+    }
+    for(n=0;n<N;n++) a1[n]/=R;
+    var lim=Math.max(0.7, A*1.6);
+    var f=frame(ctx,w,h,[14,54,22,10]);
+    var m=mapper(f,[0,N-1],[-lim,lim]);
+    var k;
+    for(k=-4;k<=4;k++){ if(Math.abs(k)<=lim) hline(ctx,f,m.Y(k), k===0?C.edge:C.grid); }
+    hline(ctx,f,m.Y(0.5),C.grid,[3,3]); hline(ctx,f,m.Y(-0.5),C.grid,[3,3]);
+    txt(ctx,'+0.5 LSB',f.R+8,m.Y(0.5),C.faint,'left','10px ui-monospace,monospace');
+    txt(ctx,'-0.5 LSB',f.R+8,m.Y(-0.5),C.faint,'left','10px ui-monospace,monospace');
+    var p0=[],p1=[],px=[],e0=0,e1=0;
+    for(n=0;n<N;n++){
+      px.push([m.X(n),m.Y(x[n])]);
+      p0.push([m.X(n),m.Y(clamp(a0[n],-lim,lim))]);
+      p1.push([m.X(n),m.Y(clamp(a1[n],-lim,lim))]);
+      e0+=(a0[n]-x[n])*(a0[n]-x[n]); e1+=(a1[n]-x[n])*(a1[n]-x[n]);
+    }
+    line(ctx,p0,C.red,1.4);
+    line(ctx,p1,C.green,1.8);
+    line(ctx,px,C.blue,1.6,[5,4]);
+    $('d2-e0').textContent=Math.sqrt(e0/N).toFixed(4);
+    $('d2-e1').textContent=Math.sqrt(e1/N).toFixed(4);
+  });
+  ampEl.oninput=repEl.oninput=cv.render;
+})();
+
+/* ==================== FIG 3: error vs input value ==================== */
+(function(){
+  makeCanvas('d3', function(ctx,w,h){
+    var M=2600, rnd=mulberry32(77), i;
+    var stacked=w<900, panels;
+    if(stacked){
+      var rowH=h/2;
+      panels=[
+        {L:10, T:0, W:w-20, H:rowH, ttl:'no dither', dith:false},
+        {L:10, T:rowH, W:w-20, H:rowH, ttl:'subtractive dither', dith:true}
+      ];
+    } else {
+      var half=(w-30)/2;
+      panels=[
+        {L:10, T:0, W:half, H:h, ttl:'no dither', dith:false},
+        {L:20+half, T:0, W:half, H:h, ttl:'subtractive dither', dith:true}
+      ];
+    }
+    panels.forEach(function(P){
+      var f={L:P.L+34,R:P.L+P.W,T:P.T+26,B:P.T+P.H-42,
+             w:P.W-34,h:P.H-68};
+      var m=mapper(f,[-2.5,2.5],[-0.62,0.62]);
+      // axes
+      hline(ctx,f,m.Y(0),C.edge);
+      ctx.save(); ctx.strokeStyle=C.grid; ctx.lineWidth=1;
+      for(i=-2;i<=2;i++){ var xx=Math.round(m.X(i))+0.5; ctx.beginPath(); ctx.moveTo(xx,f.T); ctx.lineTo(xx,f.B); ctx.stroke(); }
+      ctx.restore();
+      hline(ctx,f,m.Y(0.5),C.grid,[3,3]); hline(ctx,f,m.Y(-0.5),C.grid,[3,3]);
+      ctx.save(); ctx.strokeStyle=C.faint; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(f.L,f.B+0.5); ctx.lineTo(f.R,f.B+0.5); ctx.stroke();
+      for(i=-2;i<=2;i++){
+        var tickX=Math.round(m.X(i))+0.5;
+        ctx.beginPath(); ctx.moveTo(tickX,f.B); ctx.lineTo(tickX,f.B+5); ctx.stroke();
+        txt(ctx,String(i),tickX,f.B+14,C.faint,'center','9px ui-monospace,monospace');
+      }
+      ctx.restore();
+      txt(ctx,P.ttl,(f.L+f.R)/2,P.T+12,P.dith?C.green:C.red,'center','600 12px ui-monospace,monospace');
+      // scatter
+      var bins=48, bs=new Float64Array(bins), bc=new Float64Array(bins);
+      ctx.save(); ctx.fillStyle = P.dith ? 'rgba(78,201,167,.42)' : 'rgba(232,99,111,.55)';
+      for(i=0;i<M;i++){
+        var xv=-2.5+5*rnd();
+        var d=P.dith?(rnd()-0.5):0;
+        var e=(Math.round(xv+d)-d)-xv;
+        ctx.fillRect(m.X(xv)-0.8, m.Y(e)-0.8, 1.6, 1.6);
+        var b=Math.floor((xv+2.5)/5*bins); if(b>=0&&b<bins){ bs[b]+=e; bc[b]++; }
+      }
+      ctx.restore();
+      var pts=[];
+      for(i=0;i<bins;i++) if(bc[i]>3) pts.push([m.X(-2.5+5*(i+0.5)/bins), m.Y(bs[i]/bc[i])]);
+      line(ctx,pts,C.ink,1.7);
+      txt(ctx,'err',f.L-8,m.Y(0),C.faint,'right','10px ui-monospace,monospace');
+      txt(ctx,'+0.5',f.L-8,m.Y(0.5),C.faint,'right','10px ui-monospace,monospace');
+      txt(ctx,'-0.5',f.L-8,m.Y(-0.5),C.faint,'right','10px ui-monospace,monospace');
+      txt(ctx,'input x / Δ',(f.L+f.R)/2,P.T+P.H-10,C.faint,'center','10px ui-monospace,monospace');
+    });
+  });
+})();
+
+/* ==================== FIG 4: spectrum ==================== */
+function fft(re, im){
+  var n=re.length,i,j,bit,len,k,tmp;
+  for(i=1,j=0;i<n;i++){
+    bit=n>>1;
+    for(;j&bit;bit>>=1) j^=bit;
+    j^=bit;
+    if(i<j){ tmp=re[i];re[i]=re[j];re[j]=tmp; tmp=im[i];im[i]=im[j];im[j]=tmp; }
+  }
+  for(len=2;len<=n;len<<=1){
+    var ang=-2*Math.PI/len, wr=Math.cos(ang), wi=Math.sin(ang);
+    for(i=0;i<n;i+=len){
+      var cr=1,ci=0;
+      for(k=0;k<len/2;k++){
+        var ur=re[i+k], ui=im[i+k];
+        var xr=re[i+k+len/2], xi=im[i+k+len/2];
+        var vr=xr*cr-xi*ci, vi=xr*ci+xi*cr;
+        re[i+k]=ur+vr; im[i+k]=ui+vi;
+        re[i+k+len/2]=ur-vr; im[i+k+len/2]=ui-vi;
+        var ncr=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=ncr;
+      }
+    }
+  }
+}
+(function(){
+  var ampEl=$('d4-amp');
+  var NF=4096, BIN=157, AVG=10;
+  function spectrum(dith){
+    var acc=new Float64Array(NF/2), rnd=mulberry32(31337);
+    var reps = dith?AVG:1, rep, n;
+    var A=+ampEl.value/100;
+    for(rep=0;rep<reps;rep++){
+      var re=new Float64Array(NF), im=new Float64Array(NF);
+      for(n=0;n<NF;n++){
+        var xv=A*Math.sin(2*Math.PI*BIN*n/NF);
+        var d=dith?(rnd()-0.5):0;
+        var v=Math.round(xv+d)-d;
+        re[n]=v*(0.5-0.5*Math.cos(2*Math.PI*n/NF));  // Hann
+      }
+      fft(re,im);
+      for(n=0;n<NF/2;n++) acc[n]+=(re[n]*re[n]+im[n]*im[n]);
+    }
+    var out=new Float64Array(NF/2);
+    for(n=0;n<NF/2;n++) out[n]=10*Math.log10(acc[n]/reps/(NF*NF/16)+1e-16);
+    return out;
+  }
+  var cv=makeCanvas('d4', function(ctx,w,h){
+    var A=+ampEl.value/100;
+    $('d4-amp-o').textContent=A.toFixed(2)+' LSB';
+    var s0=spectrum(false), s1=spectrum(true);
+    var f=frame(ctx,w,h,[16,44,48,58]);
+    var m=mapper(f,[0,NF/2],[-130,10]);
+    var db;
+    for(db=0;db>=-120;db-=20){
+      hline(ctx,f,m.Y(db),C.grid);
+      txt(ctx,db+' dB',f.L-8,m.Y(db),C.faint,'right','10px ui-monospace,monospace');
+    }
+    ctx.save();
+    ctx.strokeStyle=C.faint; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(f.L,f.B+0.5); ctx.lineTo(f.R,f.B+0.5); ctx.stroke();
+    var xTicks=w<520?[0,1024,2048]:[0,512,1024,1536,2048];
+    for(var ti=0;ti<xTicks.length;ti++){
+      var tx=Math.round(m.X(xTicks[ti]))+0.5;
+      ctx.beginPath(); ctx.moveTo(tx,f.B); ctx.lineTo(tx,f.B+5); ctx.stroke();
+      txt(ctx,String(xTicks[ti]),tx,f.B+15,C.faint,'center','10px ui-monospace,monospace');
+    }
+    ctx.restore();
+    ctx.save(); ctx.strokeStyle=C.blue; ctx.globalAlpha=.45; ctx.lineWidth=1; ctx.setLineDash([3,4]);
+    ctx.beginPath(); ctx.moveTo(m.X(BIN),f.T); ctx.lineTo(m.X(BIN),f.B); ctx.stroke(); ctx.restore();
+    function trace(s,col,lw){
+      var pts=[],i;
+      for(i=1;i<NF/2;i++) pts.push([m.X(i), m.Y(clamp(s[i],-130,10))]);
+      line(ctx,pts,col,lw);
+    }
+    trace(s0,C.red,1.0);
+    trace(s1,C.green,1.1);
+    txt(ctx,'frequency bin',(f.L+f.R)/2,h-9,C.faint,'center','10px ui-monospace,monospace');
+    if(A<0.5){
+      var gone = s0[BIN] < -110;
+      if(gone) txt(ctx,'undithered output is identically zero: the tone is gone',
+                   f.L+10,f.T+14,C.red,'left','600 12px ui-monospace,monospace');
+    }
+  });
+  ampEl.oninput=cv.render;
+})();
+
+/* ==================== FIG 5: the number line ==================== */
+(function(){
+  var xEl=$('d5-x'), pEl=$('d5-p'), dEl=$('d5-d');
+  var mode='naive', sweeping=false, sweepT=0, raf=0;
+  var bN=$('d5-naive'), bE=$('d5-ecdq');
+  function setMode(m){
+    mode=m;
+    bN.className = m==='naive'?'on':'';
+    bE.className = m==='ecdq'?'on':'';
+    cv.render();
+  }
+  bN.onclick=function(){setMode('naive');};
+  bE.onclick=function(){setMode('ecdq');};
+
+  function probNonzero(xv,pv,m){
+    if(m==='ecdq') return Math.min(1,Math.abs(xv-pv));
+    var k=Math.round(pv);
+    // q == k when d lies in both [-0.5,0.5) and the shifted cell for k.
+    var overlap=Math.max(0,Math.min(0.5,k+0.5-xv)-Math.max(-0.5,k-0.5-xv));
+    return 1-overlap;
+  }
+
+  var cv=makeCanvas('d5', function(ctx,w,h){
+    var xv=+xEl.value, pv=+pEl.value, d=+dEl.value;
+    $('d5-x-o').textContent=xv.toFixed(2);
+    $('d5-p-o').textContent=pv.toFixed(2);
+    $('d5-d-o').textContent=(d>=0?'+':'')+d.toFixed(2);
+
+    var compact=w<520;
+    var lo=0.4, hi=3.6;
+    var f=frame(ctx,w,h,[26,20,34,22]);
+    var yTop=f.T+46, yBot=f.T+156;
+    var X=function(v){ return f.L + (v-lo)/(hi-lo)*f.w; };
+
+    function lane(y, val, shift, label, valColor, active, vname){
+      // cell shading for the cell the value falls into
+      var k=Math.round(val+shift);
+      var cl=X(k-0.5-shift), cr=X(k+0.5-shift);
+      ctx.save();
+      ctx.fillStyle = active ? 'rgba(78,201,167,.10)' : 'rgba(232,163,61,.09)';
+      ctx.fillRect(cl, y-30, cr-cl, 60);
+      ctx.restore();
+      // axis
+      ctx.save(); ctx.strokeStyle=C.edge; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(f.L,y); ctx.lineTo(f.R,y); ctx.stroke(); ctx.restore();
+      // integer levels
+      var i;
+      for(i=Math.ceil(lo);i<=Math.floor(hi);i++){
+        ctx.save(); ctx.strokeStyle=C.faint; ctx.lineWidth=1.4;
+        ctx.beginPath(); ctx.moveTo(X(i),y-7); ctx.lineTo(X(i),y+7); ctx.stroke(); ctx.restore();
+        txt(ctx,String(i),X(i),y+21,C.faint,'center','11px ui-monospace,monospace');
+      }
+      // thresholds at (k+0.5) - shift
+      for(i=Math.ceil(lo-0.5);i<=Math.floor(hi);i++){
+        var tx=X(i+0.5-shift);
+        if(tx<f.L-2||tx>f.R+2) continue;
+        ctx.save(); ctx.strokeStyle=shift!==0?C.amber:C.faint;
+        ctx.globalAlpha=shift!==0?0.95:0.5;
+        ctx.lineWidth=1.2; ctx.setLineDash([4,3]);
+        ctx.beginPath(); ctx.moveTo(tx,y-30); ctx.lineTo(tx,y+30); ctx.stroke(); ctx.restore();
+      }
+      // the value marker
+      ctx.save();
+      ctx.fillStyle=valColor; ctx.beginPath();
+      ctx.arc(X(val), y, 6, 0, 6.2832); ctx.fill();
+      ctx.strokeStyle=valColor; ctx.lineWidth=1.4; ctx.globalAlpha=.5;
+      ctx.beginPath(); ctx.moveTo(X(val),y-26); ctx.lineTo(X(val),y+26); ctx.stroke();
+      ctx.restore();
+      // snapped result
+      ctx.save();
+      ctx.fillStyle=C.ink; ctx.beginPath();
+      ctx.arc(X(k), y, 3.4, 0, 6.2832); ctx.fill(); ctx.restore();
+      txt(ctx,label,f.L,y-40,C.dim,'left',compact?'10px ui-monospace,monospace':'11px ui-monospace,monospace');
+      txt(ctx,vname+' = '+k, compact?f.R:X(k), y-40, C.ink,compact?'right':'center','600 12.5px ui-monospace,monospace');
+      return k;
+    }
+
+    var shiftTop=d;
+    var shiftBot=(mode==='ecdq')?d:0;
+    var q=lane(yTop, xv, shiftTop,
+      compact?'sample rounding':'encoder:  q = round( x/Δ + d[n] )', C.blue, true, 'q');
+    var pq=lane(yBot, pv, shiftBot,
+      compact ? ((mode==='ecdq')?'prediction · same shift':'prediction · fixed grid')
+              : ((mode==='ecdq') ? 'predictor:  p_q = round( p/Δ + d[n] )     [same shift]'
+                                 : 'predictor:  p_q = round( p/Δ )     [unshifted grid]'),
+      C.violet, mode==='ecdq', 'p_q');
+
+    // link the two values to show the gap
+    ctx.save();
+    ctx.strokeStyle=(q===pq)?C.green:C.red; ctx.lineWidth=1.6; ctx.setLineDash([2,3]);
+    ctx.beginPath(); ctx.moveTo(X(xv),yTop+30); ctx.lineTo(X(pv),yBot-30); ctx.stroke();
+    ctx.restore();
+
+    txt(ctx, compact ? ((q===pq)?'same cell · r = 0':'different cells · r = '+(q-pq))
+                     : ((q===pq) ? 'same cell: residual 0' : 'different cells: residual '+(q-pq)),
+        compact?w/2:(X(xv)+X(pv))/2 + 14, (yTop+yBot)/2, (q===pq)?C.green:C.red, compact?'center':'left',
+        '600 12.5px ui-monospace,monospace');
+
+    var r=q-pq;
+    $('d5-q').textContent=q; $('d5-pq').textContent=pq;
+    var rb=$('d5-rbox'); rb.className='rd '+(r===0?'good':'bad');
+    $('d5-r').textContent=(r>0?'+':'')+r;
+    var pr=probNonzero(xv,pv,mode);
+    $('d5-prob').textContent=(100*pr).toFixed(1)+'%';
+    $('d5-gap').textContent=Math.abs(xv-pv).toFixed(3);
+  });
+
+  xEl.oninput=pEl.oninput=dEl.oninput=cv.render;
+  $('d5-sweep').onclick=function(){
+    sweeping=!sweeping;
+    this.className=sweeping?'on':'';
+    if(sweeping){
+      sweepT=performance.now();
+      (function step(){
+        if(!sweeping){ cancelAnimationFrame(raf); return; }
+        var t=(performance.now()-sweepT)/2600;
+        dEl.value=(0.499*Math.sin(2*Math.PI*t)).toFixed(3);
+        cv.render();
+        raf=requestAnimationFrame(step);
+      })();
+    }
+  };
+  setMode('naive');
+})();
+
+/* ==================== FIG 6/7/8: the loop ==================== */
+(function(){
+  var N=8192;
+  var els={
+    bits:$('d6-bits'), gain:$('d6-gain'), pred:$('d6-pred'), n:$('d6-n'),
+    dither:$('d6-dither'), dedither:$('d6-dedither'), inject:$('d6-inject')
+  };
+  var state={ x:null, run:null, bars:null, step:0, quiet:0, Hnd:0 };
+
+  /* ---- block diagram ---- */
+  var svg=$('d6svg');
+  var SVGNS='http://www.w3.org/2000/svg';
+  var nodes={};
+  function el(tag,attrs,parent){
+    var e=document.createElementNS(SVGNS,tag), k;
+    for(k in attrs) e.setAttribute(k,attrs[k]);
+    (parent||svg).appendChild(e); return e;
+  }
+  function box(x,y,w,h,label,id,accent){
+    var g=el('g',{});
+    el('rect',{x:x,y:y,width:w,height:h,rx:7,fill:C.panel2,
+      stroke:accent||C.edge,'stroke-width':accent?1.6:1.2},g);
+    var t=el('text',{x:x+w/2,y:y+h/2-4,'text-anchor':'middle','font-size':12.5,
+      fill:accent||C.ink},g);
+    t.textContent=label;
+    var v=el('text',{x:x+w/2,y:y+h/2+13,'text-anchor':'middle','font-size':11.5,fill:C.dim},g);
+    if(id){ nodes[id]={label:t, val:v, rect:g.firstChild, g:g}; }
+    return g;
+  }
+  function circ(cx,cy,label,id,accent){
+    var g=el('g',{});
+    el('circle',{cx:cx,cy:cy,r:15,fill:C.panel2,stroke:accent||C.edge,'stroke-width':1.6},g);
+    var t=el('text',{x:cx,y:cy+4.5,'text-anchor':'middle','font-size':14,fill:accent||C.ink},g);
+    t.textContent=label;
+    if(id) nodes[id]={label:t,circle:g.firstChild,g:g};
+    return g;
+  }
+  function arrow(pts,color,dash){
+    var dstr='M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L');
+    el('path',{d:dstr,fill:'none',stroke:color||C.faint,'stroke-width':1.4,
+      'marker-end':'url(#ah)','stroke-dasharray':dash||''});
+  }
+  function tag(x,y,s,color,size,anchor){
+    var t=el('text',{x:x,y:y,'font-size':size||11,fill:color||C.faint,
+      'text-anchor':anchor||'start'});
+    t.textContent=s; return t;
+  }
+  var dTags={};
+  (function buildDiagram(){
+    var defs=el('defs',{});
+    var mk=el('marker',{id:'ah',viewBox:'0 0 10 10',refX:9,refY:5,
+      markerWidth:6,markerHeight:6,orient:'auto-start-reverse'},defs);
+    el('path',{d:'M0 0 L10 5 L0 10 z',fill:C.faint},mk);
+
+    // row 1: encoder
+    box(20,50,104,44,'x[n]','x',C.blue);
+    arrow([[124,72],[160,72]]);
+    circ(178,72,'+','plus1',C.amber);
+    arrow([[196,72],[228,72]]);
+    box(228,50,86,44,'round','rnd1');
+    arrow([[314,72],[348,72]]);
+    box(348,50,86,44,'q[n]','q');
+    // dither enters from below, clear of the row caption
+    dTags.enc=tag(178,120,'d[n]',C.amber,11,'middle');
+    dTags.encArrow=el('path',{d:'M178 108 L178 90',stroke:C.amber,'stroke-width':1.3,
+      'marker-end':'url(#ah)',fill:'none'});
+    tag(20,36,'encoder only: the true sample',C.faint,10.5);
+
+    // row 2: predictor (shared by encoder and decoder)
+    box(20,168,124,44,'history y[]','hist');
+    arrow([[144,190],[176,190]]);
+    box(176,168,92,44,'predict','pred');
+    arrow([[268,190],[300,190]]);
+    circ(318,190,'+','plus2',C.green);
+    arrow([[336,190],[356,190]]);
+    box(356,168,124,44,'round','rnd2');   // wide enough for 'round(p/Δ+d)'
+    arrow([[480,190],[506,190]]);
+    box(506,168,80,44,'p_q','pq');
+    dTags.pred=tag(318,236,'d[n]',C.amber,11,'middle');
+    dTags.predArrow=el('path',{d:'M318 224 L318 208',stroke:C.amber,'stroke-width':1.3,
+      'marker-end':'url(#ah)',fill:'none'});
+    tag(20,154,'shared by encoder and decoder',C.faint,10.5);
+
+    // converge to residual
+    arrow([[434,72],[640,72],[640,110]]);
+    arrow([[586,190],[640,190],[640,146]]);
+    circ(640,128,'−','minus',C.edge);
+    arrow([[658,128],[694,128]]);
+    box(694,106,206,44,'r[n]  residual','r',C.violet);
+    tag(694,96,'the only thing stored',C.violet,10.5);
+
+    // reconstruct row
+    arrow([[797,150],[797,236]]);
+    box(694,236,206,44,'q[n] = p_q + r[n]','qhat');
+    arrow([[694,258],[652,258]]);
+    circ(634,258,'−','minus2',C.green);
+    arrow([[616,258],[578,258]]);
+    box(392,236,186,44,'y[n] = (q[n]-d[n])·Δ','y',C.green);
+    dTags.rec=tag(634,224,'d[n]',C.amber,11,'middle');
+    dTags.recArrow=el('path',{d:'M634 228 L634 240',stroke:C.amber,'stroke-width':1.3,
+      'marker-end':'url(#ah)',fill:'none'});
+    // feedback into history
+    arrow([[392,258],[82,258],[82,214]]);
+    tag(150,274,'feedback: the decoder has only this',C.faint,10.5);
+
+    tag(20,330,'decoder runs the identical loop; it just adds r[n] instead of subtracting it.',C.dim,11.5);
+    tag(20,352,'d[n] = PRNG(seed, n), regenerated on both sides, never transmitted.',C.amber,11.5);
+  })();
+
+  function updateDiagram(){
+    var dith=els.dither.checked, dd=els.dedither.checked&&dith, inj=els.inject.checked&&dith;
+    // encoder dither add
+    nodes.plus1.circle.setAttribute('stroke', dith?C.amber:C.edge);
+    nodes.plus1.circle.setAttribute('stroke-dasharray', dith?'':'3,3');
+    nodes.plus1.label.setAttribute('fill', dith?C.amber:C.faint);
+    // prediction dither inject
+    nodes.plus2.circle.setAttribute('stroke', inj?C.green:C.edge);
+    nodes.plus2.circle.setAttribute('stroke-dasharray', inj?'':'3,3');
+    nodes.plus2.label.setAttribute('fill', inj?C.green:C.faint);
+    // reconstruct de-dither
+    nodes.minus2.circle.setAttribute('stroke', dd?C.green:C.edge);
+    nodes.minus2.circle.setAttribute('stroke-dasharray', dd?'':'3,3');
+    nodes.minus2.label.setAttribute('fill', dd?C.green:C.faint);
+    nodes.y.label.textContent = dd ? 'y[n] = (q[n]-d[n])·Δ' : 'y[n] = q[n]·Δ';
+    nodes.y.rect.setAttribute('stroke', dd?C.green:C.edge);
+    nodes.y.label.setAttribute('fill', dd?C.green:C.ink);
+    nodes.rnd2.label.textContent = inj ? 'round(p/Δ+d)' : 'round(p/Δ)';
+    // the dither taps that are actually live
+    [['enc',dith],['pred',inj],['rec',dd]].forEach(function(t){
+      dTags[t[0]].setAttribute('fill', t[1] ? C.amber : C.faint);
+      var a=dTags[t[0]+'Arrow'];
+      a.setAttribute('stroke', t[1] ? C.amber : C.faint);
+      a.setAttribute('opacity', t[1] ? 1 : 0.35);
+    });
+  }
+
+  var PRED_LABEL={ avg4:'y[n-4..n-1]', prev:'y[n-1]', lin:'y[n-2], y[n-1]' };
+
+  function updateDiagramValues(){
+    var R=state.run, n=state.step;
+    if(!R) return;
+    var st=R.step;
+    var sd=(R.d[n]>=0?'+':'')+R.d[n].toFixed(3);
+    nodes.x.val.textContent   = (state.x[n]/st).toFixed(2)+' Δ';
+    nodes.q.val.textContent   = R.q[n];
+    nodes.pred.val.textContent= (R.p[n]/st).toFixed(2)+' Δ';
+    nodes.pq.val.textContent  = R.pq[n];
+    nodes.r.val.textContent   = (R.r[n]>0?'+':'')+R.r[n];
+    nodes.r.label.setAttribute('fill', R.r[n]===0?C.green:C.violet);
+    nodes.qhat.val.textContent= R.pq[n]+' + ('+((R.r[n]>0?'+':'')+R.r[n])+') = '+R.q[n];
+    nodes.y.val.textContent   = (R.y[n]/st).toFixed(2)+' Δ';
+    nodes.hist.val.textContent= PRED_LABEL[els.pred.value]||'';
+    dTags.enc.textContent  = 'd[n] = '+sd;
+    dTags.pred.textContent = 'd[n] = '+sd;
+    dTags.rec.textContent  = 'd[n] = '+sd;
+  }
+
+  /* ---- recompute everything on settings change ---- */
+  var COMBOS=[
+    {k:'nd',   name:'no dither',      o:{dither:false}},
+    {k:'naive',name:'naive dither',   o:{dither:true, dedither:false, inject:false}},
+    {k:'dd',   name:'de-dither only', o:{dither:true, dedither:true,  inject:false}},
+    {k:'inj',  name:'inject only',    o:{dither:true, dedither:false, inject:true}},
+    {k:'ecdq', name:'ECDQ (both)',    o:{dither:true, dedither:true,  inject:true}}
+  ];
+  function currentKey(){
+    if(!els.dither.checked) return 'nd';
+    var dd=els.dedither.checked, inj=els.inject.checked;
+    if(dd&&inj) return 'ecdq';
+    if(inj) return 'inj';
+    if(dd) return 'dd';
+    return 'naive';
+  }
+  function recompute(){
+    var bits=+els.bits.value, gain=+els.gain.value, pred=els.pred.value;
+    state.x=demoSignal(N,gain);
+    var o={dither:els.dither.checked, dedither:els.dedither.checked,
+           inject:els.inject.checked, pred:pred, seed:42};
+    state.run=runCausal(state.x,bits,o);
+    state.quiet=quietFrac(state.x, state.run.step);
+    state.bars=COMBOS.map(function(c){
+      var oo={dither:c.o.dither,dedither:c.o.dedither,inject:c.o.inject,pred:pred,seed:42};
+      var rr=runCausal(state.x,bits,oo);
+      var z=0,i; for(i=0;i<rr.r.length;i++) if(rr.r[i]===0) z++;
+      return {k:c.k,name:c.name,H:entropy(rr.r),zeros:z/rr.r.length};
+    });
+    state.Hnd=state.bars[0].H;
+
+    $('d6-bits-o').textContent=bits+' bits';
+    $('d6-gain-o').textContent=gain.toFixed(2);
+    // enable/disable ECDQ switches
+    var on=els.dither.checked;
+    els.dedither.disabled=!on; els.inject.disabled=!on;
+    $('d6-dd-l').className='chk'+(on?'':' off');
+    $('d6-in-l').className='chk'+(on?'':' off');
+
+    var key=currentKey();
+    var cur=state.bars.filter(function(b){return b.k===key;})[0];
+    $('d6-H').textContent=cur.H.toFixed(3)+' bits';
+    $('d6-z').textContent=(100*cur.zeros).toFixed(1)+'%';
+    var pen=100*(cur.H/state.Hnd-1);
+    var pe=$('d6-pen');
+    pe.textContent=(pen>=0?'+':'')+pen.toFixed(1)+'%';
+    pe.style.color = pen>25?C.red : (pen>3?C.amber : C.green);
+    $('d6-quiet').textContent=(100*state.quiet).toFixed(1)+'%';
+
+    updateDiagram();
+    redrawAll();
+  }
+
+  /* ---- signal window plot ---- */
+  var sigCv=makeCanvas('d6sig', function(ctx,w,h){
+    if(!state.run) return;
+    var R=state.run, n0=state.step, W=96;
+    var a=Math.max(0,n0-Math.floor(W*0.72)), b=Math.min(N-1,a+W);
+    a=Math.max(0,b-W);
+    var f=frame(ctx,w,h,[14,58,24,14]);
+    // vertical range in delta units
+    var lo=1e9,hi=-1e9,i;
+    for(i=a;i<=b;i++){
+      lo=Math.min(lo, state.x[i]/R.step, R.y[i]/R.step);
+      hi=Math.max(hi, state.x[i]/R.step, R.y[i]/R.step);
+    }
+    var pad=Math.max(1.4,(hi-lo)*0.25); lo-=pad; hi+=pad;
+    var m=mapper(f,[a,b],[lo,hi]);
+    var k;
+    for(k=Math.ceil(lo);k<=Math.floor(hi);k++)
+      hline(ctx,f,m.Y(k), k===0?C.edge:C.grid);
+    for(k=Math.ceil(lo);k<=Math.floor(hi);k++)
+      txt(ctx,String(k)+'Δ',f.R+6,m.Y(k),C.faint,'left','10px ui-monospace,monospace');
+    // cursor
+    ctx.save(); ctx.strokeStyle=C.violet; ctx.globalAlpha=.35; ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.moveTo(m.X(n0),f.T); ctx.lineTo(m.X(n0),f.B); ctx.stroke(); ctx.restore();
+    // reconstruction and truth
+    var p1=[],p2=[];
+    for(i=a;i<=b;i++){ p1.push([m.X(i),m.Y(state.x[i]/R.step)]); p2.push([m.X(i),m.Y(R.y[i]/R.step)]); }
+    line(ctx,p1,C.blue,1.8);
+    line(ctx,p2,C.ink,1.2);
+    ctx.save(); ctx.fillStyle=C.ink;
+    for(i=a;i<=b;i++){ ctx.beginPath(); ctx.arc(m.X(i),m.Y(R.q[i]),1.9,0,6.2832); ctx.fill(); }
+    ctx.restore();
+    // prediction marker at cursor
+    ctx.save();
+    ctx.strokeStyle=C.violet; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(m.X(n0),m.Y(R.p[n0]/R.step),5,0,6.2832); ctx.stroke();
+    ctx.fillStyle=C.blue; ctx.beginPath(); ctx.arc(m.X(n0),m.Y(state.x[n0]/R.step),4,0,6.2832); ctx.fill();
+    ctx.restore();
+    txt(ctx,'n = '+n0+'   q='+R.q[n0]+'   p_q='+R.pq[n0]+'   r='+((R.r[n0]>0?'+':'')+R.r[n0]),
+        f.L+2,f.T+8, R.r[n0]===0?C.green:C.amber,'left','600 12px ui-monospace,monospace');
+    txt(ctx,'levels shown in units of Δ',f.L+2,h-8,C.faint,'left','10px ui-monospace,monospace');
+  });
+
+  /* ---- residual strip + histogram ---- */
+  var resCv=makeCanvas('d6res', function(ctx,w,h){
+    if(!state.run) return;
+    var compact=w<520;
+    var R=state.run, n0=state.step, M=compact?64:110;
+    var a=Math.max(0,n0-M+1), i;
+    var cw=compact?(w-4)/M:Math.min(11,(w-160)/M);
+    var y0=18;
+    txt(ctx,'residual stream, last '+M+' samples',2,8,C.faint,'left','10px ui-monospace,monospace');
+    for(i=0;i<M;i++){
+      var idx=a+i; if(idx>n0) break;
+      var v=R.r[idx], av=Math.abs(v);
+      var col = av===0 ? '#1f2937' : (av===1 ? C.amber : C.red);
+      ctx.fillStyle=col;
+      ctx.fillRect(2+i*cw, y0, Math.max(1.5,cw-1.5), 22);
+      if(idx===n0){ ctx.strokeStyle=C.violet; ctx.lineWidth=1.6;
+        ctx.strokeRect(2+i*cw-0.5, y0-1.5, Math.max(1.5,cw-1.5)+1, 25); }
+    }
+    ctx.fillStyle='#1f2937'; ctx.fillRect(2,y0+29,9,9);
+    txt(ctx,compact?'zero':'zero · cheap',16,y0+34,C.dim,'left','10px ui-monospace,monospace');
+    var lx=compact?58:132;
+    ctx.fillStyle=C.amber; ctx.fillRect(lx,y0+29,9,9);
+    txt(ctx,'±1',lx+14,y0+34,C.dim,'left','10px ui-monospace,monospace');
+    var lx2=compact?102:174;
+    ctx.fillStyle=C.red; ctx.fillRect(lx2,y0+29,9,9);
+    txt(ctx,'|r| > 1',lx2+14,y0+34,C.dim,'left','10px ui-monospace,monospace');
+
+    // On narrow screens, put the histogram below the stream instead of on top of it.
+    var hx=compact?10:w-190, hw=compact?w-20:185, hy=compact?76:8, hh=compact?h-80:h-20;
+    var hist={}, mx=0;
+    for(i=0;i<R.r.length;i++){ var vv=clamp(R.r[i],-4,4); hist[vv]=(hist[vv]||0)+1; }
+    for(var kk in hist) mx=Math.max(mx,hist[kk]);
+    var bw=hw/9;
+    for(i=-4;i<=4;i++){
+      var c=hist[i]||0, bh=mx>0?(c/mx)*(hh-24):0;
+      ctx.fillStyle = i===0?C.green:(Math.abs(i)===1?C.amber:C.red);
+      ctx.globalAlpha=0.85;
+      ctx.fillRect(hx+(i+4)*bw+2, hy+hh-16-bh, bw-4, bh);
+      ctx.globalAlpha=1;
+      txt(ctx,String(i),hx+(i+4)*bw+bw/2, hy+hh-7, C.faint,'center','9.5px ui-monospace,monospace');
+    }
+    txt(ctx,compact?'full-stream histogram':'residual histogram (full stream)',hx,hy,C.faint,'left','10px ui-monospace,monospace');
+  });
+
+  /* ---- ablation bars ---- */
+  var barCv=makeCanvas('d6bars', function(ctx,w,h){
+    if(!state.bars) return;
+    var compact=w<520;
+    var f=frame(ctx,w,h,compact?[18,8,26,130]:[18,60,26,132]);
+    var mx=0,i;
+    for(i=0;i<state.bars.length;i++) mx=Math.max(mx,state.bars[i].H);
+    mx*=1.14;
+    var key=currentKey();
+    var bh=(f.h-10)/state.bars.length;
+    for(i=0;i<state.bars.length;i++){
+      var B=state.bars[i], y=f.T+i*bh;
+      var bw=(B.H/mx)*f.w;
+      var isCur=(B.k===key);
+      var col = B.k==='nd'?C.blue : (B.k==='ecdq'?C.green : (B.k==='naive'?C.red:C.amber));
+      ctx.save();
+      ctx.globalAlpha=isCur?1:0.62;
+      ctx.fillStyle=col;
+      ctx.fillRect(f.L, y+7, bw, bh-16);
+      ctx.restore();
+      if(isCur){ ctx.save(); ctx.strokeStyle=C.ink; ctx.lineWidth=1.2;
+        ctx.strokeRect(f.L-0.5,y+6.5,bw+1,bh-15); ctx.restore(); }
+      txt(ctx,B.name,f.L-10,y+bh/2-1,isCur?C.ink:C.dim,'right','12px ui-monospace,monospace');
+      var pen=100*(B.H/state.Hnd-1);
+      var s=B.H.toFixed(3)+(compact?'':' bits');
+      if(B.k!=='nd') s+=(compact?' ':'   ')+(pen>=0?'+':'')+pen.toFixed(0)+'%';
+      var tx=compact?f.L+5:f.L+bw+9, align='left';
+      txt(ctx,s,tx,y+bh/2-1,isCur?C.ink:C.dim,align,compact?'10.5px ui-monospace,monospace':'12px ui-monospace,monospace');
+    }
+    txt(ctx,compact?'entropy · lower is better':'residual entropy, bits per sample (lower is better)',
+        f.L,h-8,C.faint,'left','10.5px ui-monospace,monospace');
+  });
+
+  function redrawAll(){
+    sigCv.render(); resCv.render(); barCv.render(); updateDiagramValues();
+  }
+  function onStep(){
+    state.step=+els.n.value;
+    $('d6-n-o').textContent=state.step;
+    sigCv.render(); resCv.render(); updateDiagramValues();
+  }
+  els.n.oninput=onStep;
+  ['bits','gain','pred','dither','dedither','inject'].forEach(function(k){
+    els[k].addEventListener('input',recompute);
+    els[k].addEventListener('change',recompute);
+  });
+
+  var playing=false, timer=0;
+  $('d6-play').onclick=function(){
+    playing=!playing; this.className=playing?'on':''; this.textContent=playing?'pause':'play';
+    if(playing){
+      timer=setInterval(function(){
+        var v=(+els.n.value+1)%N; els.n.value=v; onStep();
+      },90);
+    } else clearInterval(timer);
+  };
+
+  state.step=+els.n.value;
+  $('d6-n-o').textContent=state.step;
+  recompute();
+})();
+
+/* ==================== FIG 9: the crossover sweep ==================== */
+(function(){
+  var predEl=$('d7-pred'), gainEl=$('d7-gain'), naiveEl=$('d7-naive');
+  var N=8192, cache=null, pending=0;
+
+  function sweep(){
+    var pred=predEl.value, gain=+gainEl.value;
+    var x=demoSignal(N,gain);
+    var pts=[], bits;
+    for(bits=7; bits<=12.001; bits+=0.25){
+      var step=VMAX/(Math.pow(2,bits-1)-1);
+      var row={bits:bits, quiet:quietFrac(x,step)};
+      if(pred==='hier'){
+        row.nd   = entropy(runHier(x,bits,{dither:false}).res);
+        row.ecdq = entropy(runHier(x,bits,{dither:true,dedither:true,inject:true}).res);
+        row.naive= entropy(runHier(x,bits,{dither:true,dedither:false,inject:false}).res);
+      } else {
+        row.nd   = entropy(runCausal(x,bits,{dither:false,pred:pred}).r);
+        row.ecdq = entropy(runCausal(x,bits,{dither:true,dedither:true,inject:true,pred:pred}).r);
+        row.naive= entropy(runCausal(x,bits,{dither:true,dedither:false,inject:false,pred:pred}).r);
+      }
+      pts.push(row);
+    }
+    return pts;
+  }
+
+  var cv=makeCanvas('d7', function(ctx,w,h){
+    if(!cache) cache=sweep();
+    var P=cache, i, compact=w<520;
+    var f=frame(ctx,w,h,compact?[34,36,34,36]:[34,58,30,46]);
+    var maxH=0;
+    for(i=0;i<P.length;i++) maxH=Math.max(maxH,P[i].nd,P[i].ecdq, naiveEl.checked?P[i].naive:0);
+    maxH=Math.ceil(maxH*1.06*2)/2;
+    var m=mapper(f,[7,12],[0,maxH]);
+    var mq=mapper(f,[7,12],[0,100]);
+    var k;
+    for(k=0;k<=maxH+0.001;k+=0.5){
+      hline(ctx,f,m.Y(k),C.grid);
+      txt(ctx,k.toFixed(1),f.L-8,m.Y(k),C.faint,'right','10px ui-monospace,monospace');
+    }
+    for(k=7;k<=12;k++){
+      var xx=Math.round(m.X(k))+0.5;
+      ctx.save(); ctx.strokeStyle=C.grid; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(xx,f.T); ctx.lineTo(xx,f.B); ctx.stroke(); ctx.restore();
+      txt(ctx,String(k),m.X(k),f.B+14,C.faint,'center','10.5px ui-monospace,monospace');
+    }
+    txt(ctx,compact?'effective bits':'effective quantizer resolution (bits)',(f.L+f.R)/2,h-6,C.faint,'center','10.5px ui-monospace,monospace');
+    txt(ctx,compact?'entropy':'residual entropy, bits/sample',f.L,f.T-18,C.faint,'left','10.5px ui-monospace,monospace');
+    txt(ctx,compact?'quiet %':'quiet zone %',f.R,f.T-18,C.faint,'right','10.5px ui-monospace,monospace');
+    for(k=0;k<=100;k+=25) txt(ctx,String(k),f.R+8,mq.Y(k),C.faint,'left','10px ui-monospace,monospace');
+
+    function series(key,col,lw,dash){
+      var pts=[];
+      for(i=0;i<P.length;i++) pts.push([m.X(P[i].bits),m.Y(P[i][key])]);
+      line(ctx,pts,col,lw,dash);
+    }
+    var qp=[];
+    for(i=0;i<P.length;i++) qp.push([mq.X(P[i].bits),mq.Y(100*P[i].quiet)]);
+    line(ctx,qp,C.faint,1.2,[4,4]);
+    if(naiveEl.checked) series('naive',C.red,1.5,[5,3]);
+    series('nd',C.blue,2);
+    series('ecdq',C.green,2);
+
+    // crossover: first bit depth where ecdq drops below nd, plus a count of all
+    // sign changes (once the curves converge they interleave, which is the point)
+    var cross=null, flips=0;
+    for(i=1;i<P.length;i++){
+      var a=P[i-1].ecdq-P[i-1].nd, b=P[i].ecdq-P[i].nd;
+      if((a>0)!==(b>0)) flips++;
+      if(cross===null && a>0 && b<=0)
+        cross=P[i-1].bits + (P[i].bits-P[i-1].bits)*(a/(a-b));
+    }
+    if(cross!==null){
+      ctx.save(); ctx.strokeStyle=C.violet; ctx.lineWidth=1.4; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(m.X(cross),f.T); ctx.lineTo(m.X(cross),f.B); ctx.stroke(); ctx.restore();
+      txt(ctx,'first crossing '+cross.toFixed(2)+' b',m.X(cross)+6,f.T+10,C.violet,'left','600 11.5px ui-monospace,monospace');
+      $('d7-cross').textContent=cross.toFixed(2)+' bits'+(flips>1?'  ('+flips+' sign changes)':'');
+      $('d7-cross').style.color=C.violet;
+    } else {
+      $('d7-cross').textContent='none in 7 to 12 b';
+      $('d7-cross').style.color=C.dim;
+    }
+    $('d7-gain-o').textContent=(+gainEl.value).toFixed(2);
+  });
+
+  function invalidate(){
+    cache=null;
+    clearTimeout(pending);
+    pending=setTimeout(function(){ cv.render(); },40);
+    $('d7-gain-o').textContent=(+gainEl.value).toFixed(2);
+  }
+  predEl.onchange=invalidate;
+  gainEl.oninput=invalidate;
+  naiveEl.onchange=function(){ cv.render(); };
+})();
+</script>
+</body>
+</html>
