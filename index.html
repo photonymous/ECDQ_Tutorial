@@ -473,17 +473,25 @@ the decoder has already reconstructed.</p>
           <option value="prev">previous sample</option>
           <option value="lin">4 tap linear extrapolation</option>
         </select></div>
-      <div class="ctl"><label>sample n</label><input type="range" id="d6-n" min="0" max="8191" step="1" value="1200"><output id="d6-n-o"></output></div>
+      <div class="ctl"><label>sample n</label><input type="range" id="d6-n" min="0" max="1023" step="1" value="200"><output id="d6-n-o"></output></div>
       <button id="d6-play">play</button>
     </div>
     <div class="cvhost" id="d6sig" data-h="270"></div>
     <div class="legend">
       <span><i style="background:var(--blue)"></i>true x</span>
       <span><i style="background:var(--ink)"></i>reconstruction y</span>
-      <span><i style="background:var(--violet)"></i>prediction p</span>
       <span><i style="background:var(--grid)"></i>quantization levels</span>
+      <span><i style="background:var(--violet);width:2px;height:13px;opacity:.7"></i>current sample n</span>
     </div>
-    <div class="cvhost" id="d6res" data-h="112" data-h-mobile="190" style="margin-top:16px"></div>
+    <div class="legend" style="margin-top:6px">
+      <span><i style="background:var(--ink);width:5px;height:5px;border-radius:50%"></i>quantized code q</span>
+      <span><i style="width:8px;height:8px;border:2px solid var(--violet);background:transparent;border-radius:1px"></i>prediction p</span>
+      <span><i style="width:8px;height:8px;border:1.5px solid var(--violet);background:transparent;border-radius:50%"></i>predictor inputs</span>
+      <span><i style="background:var(--blue);width:7px;height:7px;border-radius:50%"></i>true x at n</span>
+    </div>
+    <div class="note" style="margin:10px 0 0">Click the plot, then use &larr;/&rarr; to step one
+    sample at a time. The violet line is the current sample n; ringed points feed the predictor.</div>
+    <div class="cvhost" id="d6res" data-h="190" data-h-mobile="190" style="margin-top:16px"></div>
     <div class="readout">
       <div class="rd"><div class="k">residual entropy</div><div class="v" id="d6-H">-</div></div>
       <div class="rd"><div class="k">zeros in stream</div><div class="v" id="d6-z">-</div></div>
@@ -686,27 +694,30 @@ function makeCanvas(hostId, draw){
   var cv = document.createElement('canvas');
   host.appendChild(cv);
   var ctx = cv.getContext('2d');
-  var w = 0, baseH = parseInt(host.dataset.h || '220', 10), h = baseH;
+  var w = 0, baseH = parseInt(host.dataset.h || '220', 10), h = baseH, dpr = 0;
   var mobileAt = parseInt(host.dataset.mobileAt || '520', 10);
   function resize(){
-    var dpr = window.devicePixelRatio || 1;
+    var nd = window.devicePixelRatio || 1;
     var nw = Math.max(240, Math.floor(host.getBoundingClientRect().width));
     var nh = (nw < mobileAt && host.dataset.hMobile) ? parseInt(host.dataset.hMobile,10) : baseH;
-    if(nw === w && nh === h) { render(); return; }
-    w = nw; h = nh;
-    cv.width = Math.floor(w*dpr); cv.height = Math.floor(h*dpr);
-    cv.style.width = w+'px'; cv.style.height = h+'px';
-    ctx.setTransform(dpr,0,0,dpr,0,0);
+    if(nw !== w || nh !== h || nd !== dpr){
+      w = nw; h = nh; dpr = nd;
+      cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+      cv.style.width = w+'px'; cv.style.height = h+'px';
+    }
     render();
   }
   function render(){
-    ctx.save(); ctx.setTransform(window.devicePixelRatio||1,0,0,window.devicePixelRatio||1,0,0);
+    ctx.save(); ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,w,h); draw(ctx,w,h); ctx.restore();
   }
   if(window.ResizeObserver) new ResizeObserver(resize).observe(host);
-  else window.addEventListener('resize', resize);
+  window.addEventListener('resize', resize);
   requestAnimationFrame(resize);
-  return { render: render, resize: resize };
+  // every external redraw goes through resize() so bitmap size and
+  // devicePixelRatio are re-checked (browser zoom changes dpr without
+  // necessarily resizing the host)
+  return { render: resize, resize: resize };
 }
 
 /* small plotting helpers */
@@ -1213,12 +1224,29 @@ function fft(re, im){
 
 /* ==================== FIG 6/7/8: the loop ==================== */
 (function(){
-  var N=8192;
+  var N=1024;
   var els={
     bits:$('d6-bits'), gain:$('d6-gain'), pred:$('d6-pred'), n:$('d6-n'),
     dither:$('d6-dither'), dedither:$('d6-dedither'), inject:$('d6-inject')
   };
   var state={ x:null, run:null, bars:null, step:0, quiet:0, Hnd:0 };
+
+  /* window of samples shown by the plot and the residual strip */
+  var WIN=96;
+  function winAB(n0){
+    var a=Math.max(0,n0-Math.floor(WIN*0.72)), b=Math.min(N-1,a+WIN);
+    a=Math.max(0,b-WIN);
+    return [a,b];
+  }
+  /* reconstructed samples the predictor reads for sample n */
+  function predTaps(n,kind){
+    if(n===0) return [];
+    if(kind==='prev') return [n-1];
+    if(kind==='lin' && n<2) return [n-1];
+    if(kind==='lin' && n<4) return [n-2,n-1];
+    var t=[],i; for(i=Math.max(0,n-4);i<n;i++) t.push(i);
+    return t;
+  }
 
   /* ---- block diagram ---- */
   var svg=$('d6svg');
@@ -1347,7 +1375,7 @@ function fft(re, im){
     });
   }
 
-  var PRED_LABEL={ avg4:'y[n-4..n-1]', prev:'y[n-1]', lin:'y[n-2], y[n-1]' };
+  var PRED_LABEL={ avg4:'y[n-4..n-1]', prev:'y[n-1]', lin:'y[n-4..n-1]' };
 
   function updateDiagramValues(){
     var R=state.run, n=state.step;
@@ -1424,9 +1452,8 @@ function fft(re, im){
   /* ---- signal window plot ---- */
   var sigCv=makeCanvas('d6sig', function(ctx,w,h){
     if(!state.run) return;
-    var R=state.run, n0=state.step, W=96;
-    var a=Math.max(0,n0-Math.floor(W*0.72)), b=Math.min(N-1,a+W);
-    a=Math.max(0,b-W);
+    var R=state.run, n0=state.step;
+    var ab=winAB(n0), a=ab[0], b=ab[1];
     var f=frame(ctx,w,h,[14,58,24,14]);
     // vertical range in delta units
     var lo=1e9,hi=-1e9,i;
@@ -1452,46 +1479,72 @@ function fft(re, im){
     ctx.save(); ctx.fillStyle=C.ink;
     for(i=a;i<=b;i++){ ctx.beginPath(); ctx.arc(m.X(i),m.Y(R.q[i]),1.9,0,6.2832); ctx.fill(); }
     ctx.restore();
-    // prediction marker at cursor
+    // predictor input taps: ring the reconstructed samples feeding p[n0]
+    var taps=predTaps(n0,els.pred.value), ti;
+    ctx.save(); ctx.strokeStyle=C.violet; ctx.lineWidth=1.4; ctx.globalAlpha=0.9;
+    for(ti=0;ti<taps.length;ti++){
+      if(taps[ti]<a) continue;
+      ctx.beginPath(); ctx.arc(m.X(taps[ti]),m.Y(R.y[taps[ti]]/R.step),4.5,0,6.2832); ctx.stroke();
+    }
+    ctx.restore();
+    // prediction marker at cursor: bold open square
     ctx.save();
-    ctx.strokeStyle=C.violet; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(m.X(n0),m.Y(R.p[n0]/R.step),5,0,6.2832); ctx.stroke();
+    ctx.strokeStyle=C.violet; ctx.lineWidth=2.4;
+    var pxx=m.X(n0), pyy=m.Y(R.p[n0]/R.step);
+    ctx.strokeRect(pxx-4.5,pyy-4.5,9,9);
     ctx.fillStyle=C.blue; ctx.beginPath(); ctx.arc(m.X(n0),m.Y(state.x[n0]/R.step),4,0,6.2832); ctx.fill();
     ctx.restore();
     txt(ctx,'n = '+n0+'   q='+R.q[n0]+'   p_q='+R.pq[n0]+'   r='+((R.r[n0]>0?'+':'')+R.r[n0]),
         f.L+2,f.T+8, R.r[n0]===0?C.green:C.amber,'left','600 12px ui-monospace,monospace');
-    txt(ctx,'levels shown in units of Δ',f.L+2,h-8,C.faint,'left','10px ui-monospace,monospace');
+    // x axis: window range at the corners, current sample under the cursor
+    txt(ctx,String(a),f.L,f.B+9,C.faint,'left','10px ui-monospace,monospace');
+    txt(ctx,String(b),f.R,f.B+9,C.faint,'right','10px ui-monospace,monospace');
+    var cx=clamp(m.X(n0), f.L+40, f.R-40);
+    txt(ctx,'n = '+n0,cx,f.B+9,C.violet,'center','600 10px ui-monospace,monospace');
+    txt(ctx,'levels shown in units of Δ',f.R,f.T+8,C.faint,'right','10px ui-monospace,monospace');
   });
 
   /* ---- residual strip + histogram ---- */
   var resCv=makeCanvas('d6res', function(ctx,w,h){
     if(!state.run) return;
     var compact=w<520;
-    var R=state.run, n0=state.step, M=compact?64:110;
-    var a=Math.max(0,n0-M+1), i;
-    var cw=compact?(w-4)/M:Math.min(11,(w-160)/M);
+    var R=state.run, n0=state.step;
+    // Same window and x-mapping as the signal plot above, so each residual
+    // cell sits directly under its sample.
+    var ab=winAB(n0), a=ab[0], b=ab[1];
+    var fl=14, fr=w-58, i;
+    var X=function(idx){ return fl+(idx-a)/(b-a)*(fr-fl); };
+    var cw=(fr-fl)/(b-a+1), gap=cw>4?1.5:0.6;
     var y0=18;
-    txt(ctx,'residual stream, last '+M+' samples',2,8,C.faint,'left','10px ui-monospace,monospace');
-    for(i=0;i<M;i++){
-      var idx=a+i; if(idx>n0) break;
-      var v=R.r[idx], av=Math.abs(v);
+    txt(ctx,'residual stream, aligned with the plot above',fl,8,C.faint,'left','10px ui-monospace,monospace');
+    for(i=a;i<=b;i++){
+      if(i>n0){ // not stepped yet: faded slot, keeps the strip spanning the plot width
+        ctx.save();
+        ctx.globalAlpha=0.38;
+        ctx.fillStyle='#1f2937';
+        ctx.fillRect(X(i)-cw/2+gap/2, y0, Math.max(1.2,cw-gap), 22);
+        ctx.restore();
+        continue;
+      }
+      var v=R.r[i], av=Math.abs(v);
       var col = av===0 ? '#1f2937' : (av===1 ? C.amber : C.red);
       ctx.fillStyle=col;
-      ctx.fillRect(2+i*cw, y0, Math.max(1.5,cw-1.5), 22);
-      if(idx===n0){ ctx.strokeStyle=C.violet; ctx.lineWidth=1.6;
-        ctx.strokeRect(2+i*cw-0.5, y0-1.5, Math.max(1.5,cw-1.5)+1, 25); }
+      ctx.fillRect(X(i)-cw/2+gap/2, y0, Math.max(1.2,cw-gap), 22);
+      if(i===n0){ ctx.strokeStyle=C.violet; ctx.lineWidth=1.6;
+        ctx.strokeRect(X(i)-cw/2+gap/2-0.5, y0-1.5, Math.max(1.2,cw-gap)+1, 25); }
     }
-    ctx.fillStyle='#1f2937'; ctx.fillRect(2,y0+29,9,9);
-    txt(ctx,compact?'zero':'zero · cheap',16,y0+34,C.dim,'left','10px ui-monospace,monospace');
-    var lx=compact?58:132;
+    ctx.fillStyle='#1f2937'; ctx.fillRect(fl,y0+29,9,9);
+    txt(ctx,compact?'zero':'zero · cheap',fl+14,y0+34,C.dim,'left','10px ui-monospace,monospace');
+    var lx=fl+(compact?56:130);
     ctx.fillStyle=C.amber; ctx.fillRect(lx,y0+29,9,9);
     txt(ctx,'±1',lx+14,y0+34,C.dim,'left','10px ui-monospace,monospace');
-    var lx2=compact?102:174;
+    var lx2=fl+(compact?100:172);
     ctx.fillStyle=C.red; ctx.fillRect(lx2,y0+29,9,9);
     txt(ctx,'|r| > 1',lx2+14,y0+34,C.dim,'left','10px ui-monospace,monospace');
 
-    // On narrow screens, put the histogram below the stream instead of on top of it.
-    var hx=compact?10:w-190, hw=compact?w-20:185, hy=compact?76:8, hh=compact?h-80:h-20;
+    // Histogram anchored to the bottom-right corner of the canvas
+    // (full width on narrow screens).
+    var hx=compact?10:w-195, hw=compact?w-20:185, hy=compact?76:h-112, hh=compact?h-80:106;
     var hist={}, mx=0;
     for(i=0;i<R.r.length;i++){ var vv=clamp(R.r[i],-4,4); hist[vv]=(hist[vv]||0)+1; }
     for(var kk in hist) mx=Math.max(mx,hist[kk]);
@@ -1504,7 +1557,7 @@ function fft(re, im){
       ctx.globalAlpha=1;
       txt(ctx,String(i),hx+(i+4)*bw+bw/2, hy+hh-7, C.faint,'center','9.5px ui-monospace,monospace');
     }
-    txt(ctx,compact?'full-stream histogram':'residual histogram (full stream)',hx,hy,C.faint,'left','10px ui-monospace,monospace');
+    txt(ctx,compact?'full-stream histogram':'residual histogram (full stream)',compact?hx:hx+hw,hy,C.faint,compact?'left':'right','10px ui-monospace,monospace');
   });
 
   /* ---- ablation bars ---- */
@@ -1549,6 +1602,23 @@ function fft(re, im){
     sigCv.render(); resCv.render(); updateDiagramValues();
   }
   els.n.oninput=onStep;
+
+  /* click the plot (or strip), then step one sample at a time with arrow keys */
+  function setN(v){
+    v=clamp(v,0,N-1);
+    els.n.value=v; onStep();
+  }
+  ['d6sig','d6res'].forEach(function(id){
+    var hostEl=$(id);
+    hostEl.tabIndex=0;
+    hostEl.style.outline='none';
+    hostEl.addEventListener('mousedown', function(){ hostEl.focus(); });
+    hostEl.addEventListener('keydown', function(e){
+      if(e.key==='ArrowLeft'){ setN(state.step-1); e.preventDefault(); }
+      else if(e.key==='ArrowRight'){ setN(state.step+1); e.preventDefault(); }
+    });
+  });
+
   ['bits','gain','pred','dither','dedither','inject'].forEach(function(k){
     els[k].addEventListener('input',recompute);
     els[k].addEventListener('change',recompute);
