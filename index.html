@@ -32,6 +32,9 @@ code,.m{font-family:var(--mono);font-size:.9em;color:var(--green);background:rgb
   padding:1px 5px;border-radius:4px;border:1px solid rgba(78,201,167,.16);overflow-wrap:anywhere}
 .lead{font-size:17.5px;color:#cdd7e4}
 ul{color:#c4cddb;padding-left:22px} li{margin:7px 0}
+.citeas{border-left:3px solid var(--edge);padding:2px 0 2px 14px;margin:18px 0 26px;
+  font-size:13px;color:var(--dim);line-height:1.55}
+.citeas a{color:var(--dim)}
 .tldr{background:var(--panel);border:1px solid var(--edge);border-left:3px solid var(--violet);
   border-radius:8px;padding:16px 20px;margin:26px 0}
 .tldr p{margin:8px 0}
@@ -92,6 +95,10 @@ th{color:var(--dim);font-weight:600;font-size:12px;letter-spacing:.06em;text-tra
 td.n{font-family:var(--mono);text-align:right}
 footer{margin-top:80px;padding-top:26px;border-top:1px solid var(--edge);color:var(--faint);font-size:13.5px}
 footer a{color:var(--dim)}
+footer ol{padding-left:22px}
+footer li{margin:4px 0}
+a.cite{font-size:.78em;vertical-align:super;line-height:0;color:var(--dim);text-decoration:none}
+a.cite:hover{color:var(--ink)}
 .eq{font-family:var(--mono);background:var(--panel);border:1px solid var(--edge);border-radius:8px;
   padding:13px 18px;margin:18px 0;font-size:14.5px;color:#d6e3f2;overflow-x:auto}
 .eq .c{color:var(--faint)}
@@ -122,6 +129,9 @@ footer a{color:var(--dim)}
 <span class="sub">An interactive guide to ECDQ dither synchronization: why deliberate noise improves quantization, why a naive implementation compresses poorly, and how synchronized rounding avoids most of that cost.</span></h1>
 </header>
 
+<div class="citeas">Photonymous (2026). <i>ECDQ: An Interactive Tutorial on Entropy-Coded Dithered
+Quantization.</i><br><a href="https://photonymous.github.io/ECDQ_Tutorial/">https://photonymous.github.io/ECDQ_Tutorial/</a></div>
+
 <p class="lead">The main idea on this page fits in one line:</p>
 
 <div class="eq">p<sub>q</sub> = round( p / &Delta; <span class="g">+ d[n]</span> )</div>
@@ -134,11 +144,14 @@ that position. The sections below explain why this keeps the two rounding operat
 dither, prediction, and entropy coding. Shared dither makes quantization error independent of the
 input; applying that same dither when the prediction is rounded keeps accurate predictions cheap to
 encode. The tutorial develops those two ideas separately and then joins them in a closed prediction
-loop.</p>
+loop. ECDQ comes from the universal-quantization literature: Ziv introduced the
+construction&nbsp;<a class="cite" href="#ref3">[3]</a>, and Zamir and Feder developed its theory and
+gave it the name&nbsp;<a class="cite" href="#ref5">[5,&thinsp;6]</a>.</p>
 </div>
 
-<p><b>How to use this page.</b> Every figure is interactive and runs entirely in your browser using
-the equations presented here. Try the sliders and switches to see how the results change.</p>
+<p><b>How to use this page.</b> Every figure is interactive, and every number is computed live in
+your browser from the equations presented here &mdash; nothing is fetched or precomputed. Try the
+sliders and switches to see how the results change.</p>
 
 <div class="key"><b>Scope: these are toy models, not performance benchmarks.</b> Every plotted signal
 is synthetic and one-dimensional. More importantly, the main worked predictors are tiny, causal 1D
@@ -215,7 +228,11 @@ y[n] = ( q[n] <span class="a">- d[n]</span> ) &times; &Delta;  <span class="c">/
 </div>
 
 <p>Because the same <span class="m">d[n]</span> is subtracted back off, this is called
-<b>subtractive dither</b>. It requires that the decoder can regenerate <span class="m">d[n]</span>
+<b>subtractive dither</b> &mdash; an idea introduced by Roberts in 1962&nbsp;<a class="cite"
+href="#ref1">[1]</a>, with the conditions on <span class="m">d[n]</span> established by
+Schuchman&nbsp;<a class="cite" href="#ref2">[2]</a> and the theory surveyed by Lipshitz, Wannamaker,
+and Vanderkooy&nbsp;<a class="cite" href="#ref4">[4]</a>. It requires that the decoder can
+regenerate <span class="m">d[n]</span>
 exactly, which is easy: both sides run the same hash or PRNG on the sample index and a shared seed. No
 dither values are ever transmitted.</p>
 
@@ -682,25 +699,30 @@ the signal and predictor: these causal 1D toys illustrate the mechanisms, while 
 and higher-dimensional predictors will produce different numerical results.</p>
 
 <footer>
-<p><b>References and further reading.</b></p>
-<ul>
-<li>L. G. Roberts, “Picture Coding Using Pseudo-Random Noise,” <i>IRE Transactions on Information
-Theory</i>, 8(2), 145–154, 1962.</li>
-<li>L. Schuchman, “Dither Signals and Their Effect on Quantization Noise,” <i>IEEE Transactions on
-Communication Technology</i>, 12(4), 162–165, 1964.</li>
-<li>S. P. Lipshitz, R. A. Wannamaker, and J. Vanderkooy, “Quantization and Dither: A Theoretical
-Survey,” <i>Journal of the Audio Engineering Society</i>, 40(5), 355–375, 1992.</li>
-<li>R. Zamir and M. Feder, “Information Rates of Pre/Post-Filtered Dithered Quantizers,” <i>IEEE
-Transactions on Information Theory</i>, 42(5), 1340–1353, 1996.</li>
-<li>D. W. E. Schobben, R. A. Beuker, and W. Oomen, “Dither and Data Compression,” <i>IEEE
-Transactions on Signal Processing</i>, 45(8), 2097–2101, 1997.</li>
-<li>R. A. Wannamaker, <i>The Theory of Dithered Quantization</i>, Ph.D. thesis, University of
-Waterloo, 1997.</li>
-<li>R. Zamir, Y. Kochman, and U. Erez, “Achieving the Gaussian Rate-Distortion Function by
-Prediction,” <i>IEEE Transactions on Information Theory</i>, 54(7), 3354–3364, 2008.</li>
-</ul>
-<p>Every number on this page is computed in your browser from the equations and toy signals shown
-here. The page fetches no external data and uses no precomputed lookup tables.</p>
+<p><b>References and further reading.</b> Subtractive dither originates with Roberts [1]; the term
+ECDQ and its rate-distortion theory are due to Zamir and Feder [5,&thinsp;6], building on Ziv's
+universal quantizer [3].</p>
+<ol>
+<li id="ref1">L. G. Roberts, “Picture Coding Using Pseudo-Random Noise,” <i>IRE Transactions on Information
+Theory</i>, 8(2), 145–154, 1962. <a href="https://doi.org/10.1109/TIT.1962.1057702">doi:10.1109/TIT.1962.1057702</a></li>
+<li id="ref2">L. Schuchman, “Dither Signals and Their Effect on Quantization Noise,” <i>IEEE Transactions on
+Communication Technology</i>, 12(4), 162–165, 1964. <a href="https://doi.org/10.1109/TCOM.1964.1088973">doi:10.1109/TCOM.1964.1088973</a></li>
+<li id="ref3">J. Ziv, “On Universal Quantization,” <i>IEEE Transactions on Information Theory</i>,
+31(3), 344–347, 1985. <a href="https://doi.org/10.1109/TIT.1985.1057034">doi:10.1109/TIT.1985.1057034</a></li>
+<li id="ref4">S. P. Lipshitz, R. A. Wannamaker, and J. Vanderkooy, “Quantization and Dither: A Theoretical
+Survey,” <i>Journal of the Audio Engineering Society</i>, 40(5), 355–375, 1992. <a href="https://www.aes.org/e-lib/browse.cfm?elib=7047">AES E-Library 7047</a></li>
+<li id="ref5">R. Zamir and M. Feder, “On Universal Quantization by Randomized Uniform/Lattice
+Quantizers,” <i>IEEE Transactions on Information Theory</i>, 38(2), 428–436, 1992.
+<a href="https://doi.org/10.1109/18.119699">doi:10.1109/18.119699</a></li>
+<li id="ref6">R. Zamir and M. Feder, “Information Rates of Pre/Post-Filtered Dithered Quantizers,” <i>IEEE
+Transactions on Information Theory</i>, 42(5), 1340–1353, 1996. <a href="https://doi.org/10.1109/18.532876">doi:10.1109/18.532876</a></li>
+<li id="ref7">D. W. E. Schobben, R. A. Beuker, and W. Oomen, “Dither and Data Compression,” <i>IEEE
+Transactions on Signal Processing</i>, 45(8), 2097–2101, 1997. <a href="https://doi.org/10.1109/78.611218">doi:10.1109/78.611218</a></li>
+<li id="ref8">R. A. Wannamaker, <i>The Theory of Dithered Quantization</i>, Ph.D. thesis, University of
+Waterloo, 1997. <a href="https://hdl.handle.net/10012/202">hdl:10012/202</a></li>
+<li id="ref9">R. Zamir, Y. Kochman, and U. Erez, “Achieving the Gaussian Rate-Distortion Function by
+Prediction,” <i>IEEE Transactions on Information Theory</i>, 54(7), 3354–3364, 2008. <a href="https://doi.org/10.1109/TIT.2008.924683">doi:10.1109/TIT.2008.924683</a></li>
+</ol>
 </footer>
 
 </div>
