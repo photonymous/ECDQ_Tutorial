@@ -32,8 +32,7 @@ code,.m{font-family:var(--mono);font-size:.9em;color:var(--green);background:rgb
   padding:1px 5px;border-radius:4px;border:1px solid rgba(78,201,167,.16);overflow-wrap:anywhere}
 .lead{font-size:17.5px;color:#cdd7e4}
 ul{color:#c4cddb;padding-left:22px} li{margin:7px 0}
-.citeas{border-left:3px solid var(--edge);padding:2px 0 2px 14px;margin:18px 0 26px;
-  font-size:13px;color:var(--dim);line-height:1.55}
+.citeas{margin:14px 0 30px;font-size:13px;color:var(--dim);line-height:1.55}
 .citeas a{color:var(--dim)}
 .tldr{background:var(--panel);border:1px solid var(--edge);border-left:3px solid var(--violet);
   border-radius:8px;padding:16px 20px;margin:26px 0}
@@ -125,24 +124,45 @@ a.cite:hover{color:var(--ink)}
 <div class="wrap">
 
 <header>
-<h1>Dither without the usual compression penalty
-<span class="sub">An interactive guide to ECDQ dither synchronization: why deliberate noise improves quantization, why a naive implementation compresses poorly, and how synchronized rounding avoids most of that cost.</span></h1>
+<h1>Dither, but without the usual compression penalty
+<span class="sub">An interactive tutorial of ECDQ dither synchronization: Demonstrates why intentionally adding noise (dither) improves the quality of quantized data, why a naive implementation of dither harms data compressability, and how synchronized rounding of dithered data eliminates most of that harm.</span></h1>
 </header>
 
-<div class="citeas">Photonymous (2026). <i>ECDQ: An Interactive Tutorial on Entropy-Coded Dithered
+<div class="citeas">Photonymous (2026). <i>ECDQ: An Interactive Tutorial on Entropy-Constrained Dithered
 Quantization.</i><br><a href="https://photonymous.github.io/ECDQ_Tutorial/">https://photonymous.github.io/ECDQ_Tutorial/</a></div>
 
-<p class="lead">The main idea on this page fits in one line:</p>
+<p>This tutorial is about storing or transmitting a signal (1D data like audio, 2D data like images, 3D data like flow velocities, etc.) using fewer
+bits. The process has two stages. First, <em>quantization</em> rounds each value to
+a coarse grid; this is the only step that discards information, and the amount of quantization is the
+<em>knob</em> that determines the quality vs. bit-rate tradeoff. Then, the quantized samples are
+compressed <em>losslessly</em>, using <em>prediction</em>: estimate each sample from its
+already-decoded neighbors, and store only the difference between the estimate and the truth. 
+Quantization has an
+undesirable side effect: the error it introduces is a function of the signal, producing
+structured artifacts. A standard mitigation is to add <em>dither</em>, which deliberately adds a small
+random offset before rounding. This transforms the error from structured to unstructured.
+However, dither adds energy (entropy) and thus decreases the predictability of a
+predictive entropy encoding (compression) scheme. This is because the random
+offsets push what would otherwise be accurate predictions off the rounding grid causing
+the bit rate after compression to increase.
+<em>Entropy-constrained dithered quantization</em> (ECDQ) gets the benefits of subtractive dither
+(reduction in quantization-induced structured error)
+error while mitigating the bit-rate impact. This tutorial introduces and demonstrates ECDQ piece by piece.</p>
+
+<p class="lead">The central idea can be expressed in a single line:</p>
 
 <div class="eq">p<sub>q</sub> = round( p / &Delta; <span class="g">+ d[n]</span> )</div>
 
-<p>Before rounding a <em>prediction</em>, add the same dither value used for the <em>real sample</em> at
+<p>Here <span class="m">p</span> is the prediction, <span class="m">&Delta;</span> is the grid
+spacing, <span class="m">d[n]</span> is the dither value for sample <span class="m">n</span>, and
+the result <span class="m">p<sub>q</sub></span> is the prediction, quantized.
+Before rounding a <em>prediction</em>, add the same dither value used for the <em>real sample</em> at
 that position. The sections below explain why this keeps the two rounding operations synchronized.</p>
 
 <div class="tldr">
-<p><b>What ECDQ contributes.</b> An entropy-coded dithered quantizer (ECDQ) combines subtractive
+<p><b>What ECDQ contributes.</b> An entropy-constrained dithered quantizer (ECDQ) combines subtractive
 dither, prediction, and entropy coding. Shared dither makes quantization error independent of the
-input; applying that same dither when the prediction is rounded keeps accurate predictions cheap to
+input; applying the same dither when the prediction is rounded keeps accurate predictions cheap to
 encode. The tutorial develops those two ideas separately and then joins them in a closed prediction
 loop. ECDQ comes from the universal-quantization literature: Ziv introduced the
 construction&nbsp;<a class="cite" href="#ref3">[3]</a>, and Zamir and Feder developed its theory and
@@ -150,48 +170,48 @@ gave it the name&nbsp;<a class="cite" href="#ref5">[5,&thinsp;6]</a>.</p>
 </div>
 
 <p><b>How to use this page.</b> Every figure is interactive, and every number is computed live in
-your browser from the equations presented here &mdash; nothing is fetched or precomputed. Try the
+your browser from the equations presented here; nothing is fetched or precomputed. Try the
 sliders and switches to see how the results change.</p>
 
-<div class="key"><b>Scope: these are toy models, not performance benchmarks.</b> Every plotted signal
-is synthetic and one-dimensional. More importantly, the main worked predictors are tiny, causal 1D
-examples: previous-sample prediction, a four-sample average, and a four-sample linear trend. They were
-chosen to expose the arithmetic, not because they represent strong predictive coding. The optional
-midpoint hierarchy is a toy non-causal 1D ordering included only for contrast.</div>
+<div class="key"><b>These are toy models, not performance predictions.</b> Every plotted signal
+is synthetic and one-dimensional. More importantly, the selectable predictors are tiny, causal 1D
+examples: previous-sample prediction, a four-sample average, and a four-sample linear predictor
+(extrapolator). They were chosen to make the arithmetic clear, not because they represent the best
+algorithms.</div>
 
-<p>Non-causal and higher-dimensional applications can use samples on both sides of a target and much
-larger spatial or temporal neighbourhoods. Those stronger predictors can change the residual entropy,
-zero rate, dither penalty, and crossover point substantially. <b>The numerical tradeoffs shown here
-are therefore not portable.</b> The fundamental phenomena are: undithered quantization creates
-signal-dependent error; naive dither can desynchronize sample and prediction thresholds; ECDQ aligns
-those thresholds; and preserving information in the quiet zone can cost entropy.</p>
+<p>Non-causal and higher-dimensional applications can use a neighborhood of samples surrounding
+each sample being predicted, giving better prediction performance. Such predictors will have different residual entropies,
+zero rates, dither penalties, and crossover points. <b>The specific numerical values shown here
+are therefore not directly predictive of the non-causal or higher-dimensional cases.</b> However, the key phenomena generalize: undithered quantization creates
+signal-dependent structured error; naive dither can reduce the error structure at the expense of increased entropy; ECDQ aligns rounding thresholds to reduce the entropy.</p>
 
 <!-- =============================================================== -->
-<h2><span class="num">SECTION 1</span>Rounding is not a small, harmless error</h2>
+<h2><span class="num">SECTION 1</span>Rounding error is not white noise</h2>
 
-<p>A quantizer takes a continuous value and snaps it to the nearest point on a fixed grid. The grid
-spacing is <span class="m">&Delta;</span>, one least significant bit, or one LSB. Fewer quantization
-levels require fewer bits, and predictive coding can reduce the rate further when nearby samples are
-similar.</p>
+<p>A quantizer takes a continuous value and forces it to the nearest point on a fixed lattice. The 
+lattice spacing is <span class="m">&Delta;</span>, or one least significant bit (LSB). Fewer quantization
+levels require fewer bits, and predictive coding can reduce the rate further when adjacent samples are
+correlated (similar to each other).</p>
 
-<p>The error is at most half an LSB, but its size alone is misleading because <b>the error is a
-deterministic function of the signal</b>. It is not noise. Feed the
-quantizer the same value twice and you get the same error twice. That makes the error correlated with
-the signal, and correlated error is <em>distortion</em>: it shows up as banding in images, harmonic
-tones in audio, and structured artifacts in numerical data.</p>
+<p>The error is at most half of an LSB, but its size alone is misleading because <b>the error is a
+deterministic function of the signal</b>. It is not noise. If the
+quantizer is fed the same value twice, it will produce the same error twice. This correlated error is a <em>distortion</em> that shows up as banding in images, harmonics
+in audio, and structured artifacts in numerical data.</p>
 
 <div class="fig">
-  <div class="fig-head"><span class="tag">FIG 1</span><span class="ttl">The staircase and the sawtooth it leaves behind</span></div>
+  <div class="fig-head"><span class="tag">FIG 1</span><span class="ttl">The rounding grid and the distortion it causes</span></div>
   <div class="fig-body">
     <div class="ctls">
       <div class="ctl"><label>resolution setting</label><input type="range" id="d1-bits" min="2" max="7" step="1" value="3"><output id="d1-bits-o"></output></div>
-      <label class="chk"><input type="checkbox" id="d1-dither"> add subtractive dither</label>
+      <label class="chk"><input type="checkbox" id="d1-dither"> use dither</label>
+      <label class="chk" id="d1-sub-l"><input type="radio" name="d1-mode" id="d1-sub" checked> subtractive (decoder removes d[n])</label>
+      <label class="chk" id="d1-reg-l"><input type="radio" name="d1-mode" id="d1-reg"> regular (d[n] stays in the output)</label>
     </div>
     <div class="cvhost" id="d1" data-h="330"></div>
     <div class="legend">
       <span><i style="background:var(--blue)"></i>true signal</span>
-      <span><i style="background:var(--ink)"></i>reconstruction</span>
-      <span><i style="background:var(--red)"></i>error (reconstruction minus truth)</span>
+      <span><i style="background:var(--ink)"></i>reconstructed</span>
+      <span><i style="background:var(--red)"></i>error (reconstructed minus truth)</span>
       <span><i style="background:var(--grid)"></i>quantization grid</span>
     </div>
     <div class="readout">
@@ -201,21 +221,24 @@ tones in audio, and structured artifacts in numerical data.</p>
   </div>
 </div>
 
-<p>With dither off, the red error trace is a clean sawtooth locked to the signal. The second readout
-shows that nearly all of the error is predictable from the input. In audio, that structure is heard as
+<p>With dither off, the red error trace looks similar to a sawtooth. The second readout
+shows that nearly all of the error is predictable from the input (computed by grouping samples by
+where the input falls within its quantization cell, the fractional part of
+<span class="m">x/&Delta;</span>, and measuring what fraction of the error variance the per-group
+mean error accounts for). In audio, that structure is heard as
 distortion; in repeated numerical calculations, it can accumulate as systematic bias.</p>
 
-<p>Turn dither on and the predictable fraction drops toward zero while the sawtooth becomes
+<p>Turn subtractive dither on and the predictable fraction drops toward zero while the error becomes
 unstructured noise. The RMS error barely changes: both cases remain near
 <span class="m">&Delta;/sqrt(12)</span>. Subtractive dither changes the character of the error without
 increasing its power. Non-subtractive dither, in which the decoder cannot remove
-<span class="m">d</span>, leaves some of the deliberately added noise in the output. That distinction
+<span class="m">d</span>, leaves some of the deliberately added noise in the output; switch Fig 1 to
+the <em>regular</em> option to see the error grow while staying unstructured. That distinction
 is often lost in the shorthand claim that dither simply adds noise.</p>
 
-<div class="note">There is one important exception. If the signal is much smaller than a step, the
-undithered error is small in RMS simply because the output is a constant zero and the error is just the
-signal itself. The RMS is low even though the signal has been completely lost. The next figure shows
-why RMS is not a useful measure in that case.</div>
+<div class="note">There is one important exception. If the signal is much smaller than a quant-step, the
+undithered error is small in RMS simply because the output gets rounded to a constant zero and the error
+becomes the signal itself. The RMS is low even though the signal has been completely lost. The next figure shows why RMS is not a useful measure in that case.</div>
 
 <!-- =============================================================== -->
 <h2><span class="num">SECTION 2</span>Dither: adding noise on purpose</h2>
@@ -228,13 +251,21 @@ y[n] = ( q[n] <span class="a">- d[n]</span> ) &times; &Delta;  <span class="c">/
 </div>
 
 <p>Because the same <span class="m">d[n]</span> is subtracted back off, this is called
-<b>subtractive dither</b> &mdash; an idea introduced by Roberts in 1962&nbsp;<a class="cite"
+<b>subtractive dither</b>, an idea introduced by Roberts in 1962&nbsp;<a class="cite"
 href="#ref1">[1]</a>, with the conditions on <span class="m">d[n]</span> established by
 Schuchman&nbsp;<a class="cite" href="#ref2">[2]</a> and the theory surveyed by Lipshitz, Wannamaker,
 and Vanderkooy&nbsp;<a class="cite" href="#ref4">[4]</a>. It requires that the decoder can
 regenerate <span class="m">d[n]</span>
 exactly, which is easy: both sides run the same hash or PRNG on the sample index and a shared seed. No
 dither values are ever transmitted.</p>
+
+<p>With <span class="m">d[n]</span> uniform on [-0.5, +0.5), the encode step is exactly
+<b>stochastic rounding</b>: a value lands on the grid point above it with probability equal to its
+fractional distance to that point, and below otherwise, so the rounded value is correct <em>on
+average</em> (unbiased). This uniform width-one distribution matters; a narrower, wider, or
+non-uniform <span class="m">d[n]</span> would not give the exact probabilities, and the independence
+result below would fail. Every dithered figure on this page draws <span class="m">d[n]</span> from
+this distribution.</p>
 
 <p>Combining these equations gives
 <span class="m">y[n] = x[n] + e[n]&Delta;</span> where <span class="m">e[n]</span> is the rounding
@@ -478,9 +509,8 @@ each node show the values at the current sample.</p>
       <div class="ctl"><label>predictor</label>
         <select id="d6-pred">
           <option value="avg4">4 tap causal average</option>
-          <option value="prev">previous sample</option>
-          <option value="lin">4 tap linear extrapolation</option>
-        </select></div>
+          <option value="prev">previous sample (1 tap)</option>
+          <option value="lin">4 tap linear extrapolation</option>        </select></div>
       <div class="ctl"><label>sample n</label><input type="range" id="d6-n" min="0" max="1023" step="1" value="200"><output id="d6-n-o"></output></div>
       <button id="d6-play">play</button>
     </div>
@@ -565,9 +595,8 @@ options change.</p>
       <div class="ctl"><label>predictor</label>
         <select id="d8-pred">
           <option value="avg4">4 tap causal average</option>
-          <option value="prev">previous sample</option>
-          <option value="lin">4 tap linear extrapolation</option>
-        </select></div>
+          <option value="prev">previous sample (1 tap)</option>
+          <option value="lin">4 tap linear extrapolation</option>        </select></div>
     </div>
     <div class="cvhost" id="d6bars" data-h="230"></div>
     <div class="note" style="margin:12px 0 0">Lower is better. These controls are synchronized with
@@ -628,9 +657,9 @@ depth, the second effect overtakes the first.</p>
     <div class="ctls">
       <div class="ctl"><label>predictor</label>
         <select id="d7-pred">
-          <option value="lin">4 tap linear extrapolation</option>
-          <option value="hier">hierarchical midpoint (1D toy)</option>
           <option value="avg4">4 tap causal average</option>
+          <option value="prev">previous sample (1 tap)</option>
+          <option value="lin" selected>4 tap linear extrapolation</option>
         </select></div>
       <div class="ctl"><label>signal gain</label><input type="range" id="d7-gain" min="0.15" max="3" step="0.05" value="0.3"><output id="d7-gain-o"></output></div>
       <label class="chk"><input type="checkbox" id="d7-naive"> show naive dither</label>
@@ -868,36 +897,6 @@ function runCausal(x, bits, o){
   return { q:q, pq:pq, r:r, y:y, p:pr, d:d, step:step, maxInt:maxInt };
 }
 
-/* Hierarchical midpoint predictor used by the crossover figure.
-   Level 0 stores two raw values; each later level predicts the midpoint of two
-   already decoded neighbours (periodic). N must be a power of two. */
-function runHier(x, bits, o){
-  var N=x.length, maxInt=Math.pow(2,bits-1)-1, step=VMAX/maxInt;
-  var rnd=mulberry32(o.seed||42), n;
-  var d=new Float64Array(N);
-  if(o.dither) for(n=0;n<N;n++) d[n]=rnd()-0.5;
-  var q=new Int32Array(N);
-  for(n=0;n<N;n++) q[n]=clamp(Math.round(clamp(x[n]/step,-maxInt,maxInt)+d[n]),-maxInt,maxInt);
-  var y=new Float64Array(N), res=[], levels=Math.round(Math.log2(N)), level, i;
-  for(level=0; level<levels; level++){
-    var stride = N/Math.pow(2,level+1);
-    if(level === 0){
-      for(i=0;i<N;i+=stride){ y[i]=(q[i]-(o.dedither?d[i]:0))*step; res.push(q[i]); }
-    } else {
-      var s=stride, s2=2*s;
-      for(i=s;i<N;i+=s2){
-        var L=(i-s+N)%N, R=(i+s)%N;
-        var p=(y[L]+y[R])/2;
-        var pq=clamp(Math.round(p/step + (o.inject?d[i]:0)), -maxInt, maxInt);
-        var rr=q[i]-pq;
-        res.push(rr);
-        y[i]=((pq+rr)-(o.dedither?d[i]:0))*step;
-      }
-    }
-  }
-  return { res:res, step:step };
-}
-
 function quietFrac(x, step){
   var c=0,i; for(i=0;i<x.length;i++) if(Math.abs(x[i])<step) c++;
   return c/x.length;
@@ -905,10 +904,11 @@ function quietFrac(x, step){
 
 /* ============================ FIG 1: staircase ============================ */
 (function(){
-  var bitsEl=$('d1-bits'), ditEl=$('d1-dither'), oBits=$('d1-bits-o');
+  var bitsEl=$('d1-bits'), ditEl=$('d1-dither'), subEl=$('d1-sub'), regEl=$('d1-reg'),
+      oBits=$('d1-bits-o');
   var N=560;
   function compute(){
-    var bits=+bitsEl.value, dith=ditEl.checked;
+    var bits=+bitsEl.value, dith=ditEl.checked, sub=subEl.checked;
     var maxInt=Math.pow(2,bits-1)-1, step=1/maxInt;
     var rnd=mulberry32(9001);
     var x=new Float64Array(N), y=new Float64Array(N), e=new Float64Array(N), n;
@@ -917,10 +917,10 @@ function quietFrac(x, step){
       x[n]=0.86*Math.sin(2*Math.PI*t*1.5)*Math.exp(-0.4*t) + 0.06*Math.sin(2*Math.PI*t*9);
       var d=dith?(rnd()-0.5):0;
       var q=clamp(Math.round(clamp(x[n]/step,-maxInt,maxInt)+d),-maxInt,maxInt);
-      y[n]=(q-d)*step;
+      y[n]=(q-(sub?d:0))*step;
       e[n]=y[n]-x[n];
     }
-    return {x:x,y:y,e:e,step:step,maxInt:maxInt,bits:bits};
+    return {x:x,y:y,e:e,step:step,maxInt:maxInt,bits:bits,reg:dith&&!sub};
   }
   var cv=makeCanvas('d1', function(ctx,w,h){
     var D=compute();
@@ -942,7 +942,7 @@ function quietFrac(x, step){
     pts=[]; for(n=0;n<N;n++) pts.push([m1.X(n),m1.Y(D.x[n])]);
     line(ctx,pts,C.blue,1.8);
     // error panel
-    var em=Math.max(0.75*D.step, 1e-9);
+    var em=Math.max((D.reg?1.05:0.75)*D.step, 1e-9);   /* regular dither: error can reach ±1Δ */
     var m2=mapper(f2,[0,N-1],[-em*1.15,em*1.15]);
     hline(ctx,f2,m2.Y(0),C.edge);
     hline(ctx,f2,m2.Y(D.step/2),C.grid,[3,3]);
@@ -976,7 +976,15 @@ function quietFrac(x, step){
     ce.style.color = eta>0.5 ? C.red : C.green;
     oBits.textContent=(2*D.maxInt+1)+' levels';
   });
-  bitsEl.oninput=ditEl.onchange=cv.render;
+  function refresh(){
+    var on=ditEl.checked;
+    subEl.disabled=regEl.disabled=!on;
+    $('d1-sub-l').className='chk'+(on?'':' off');
+    $('d1-reg-l').className='chk'+(on?'':' off');
+    cv.render();
+  }
+  bitsEl.oninput=ditEl.onchange=subEl.onchange=regEl.onchange=refresh;
+  refresh();
 })();
 
 /* ==================== FIG 2: sub-LSB recovery by averaging ==================== */
@@ -1583,7 +1591,7 @@ function fft(re, im){
     var taps=predTaps(n0,els.pred.value), ti;
     ctx.save(); ctx.strokeStyle=C.violet; ctx.lineWidth=1.4; ctx.globalAlpha=0.9;
     for(ti=0;ti<taps.length;ti++){
-      if(taps[ti]<a) continue;
+      if(taps[ti]<a || taps[ti]>b) continue;
       ctx.beginPath(); ctx.arc(m.X(taps[ti]),m.Y(R.y[taps[ti]]/R.step),4.5,0,6.2832); ctx.stroke();
     }
     ctx.restore();
@@ -1767,15 +1775,9 @@ function fft(re, im){
     for(bits=7; bits<=12.001; bits+=0.25){
       var step=VMAX/(Math.pow(2,bits-1)-1);
       var row={bits:bits, quiet:quietFrac(x,step)};
-      if(pred==='hier'){
-        row.nd   = entropy(runHier(x,bits,{dither:false}).res);
-        row.ecdq = entropy(runHier(x,bits,{dither:true,dedither:true,inject:true}).res);
-        row.naive= entropy(runHier(x,bits,{dither:true,dedither:false,inject:false}).res);
-      } else {
-        row.nd   = entropy(runCausal(x,bits,{dither:false,pred:pred}).r);
-        row.ecdq = entropy(runCausal(x,bits,{dither:true,dedither:true,inject:true,pred:pred}).r);
-        row.naive= entropy(runCausal(x,bits,{dither:true,dedither:false,inject:false,pred:pred}).r);
-      }
+      row.nd   = entropy(runCausal(x,bits,{dither:false,pred:pred}).r);
+      row.ecdq = entropy(runCausal(x,bits,{dither:true,dedither:true,inject:true,pred:pred}).r);
+      row.naive= entropy(runCausal(x,bits,{dither:true,dedither:false,inject:false,pred:pred}).r);
       pts.push(row);
     }
     return pts;
