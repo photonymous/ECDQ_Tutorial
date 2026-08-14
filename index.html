@@ -124,8 +124,8 @@ a.cite:hover{color:var(--ink)}
 <div class="wrap">
 
 <header>
-<h1>Dither, but without the usual compression penalty
-<span class="sub">An interactive tutorial of ECDQ dither synchronization: Demonstrates why intentionally adding noise (dither) improves the quality of quantized data, why a naive implementation of dither harms data compressability, and how synchronized rounding of dithered data eliminates most of that harm.</span></h1>
+<h1>Dither, but without the compression penalty
+<span class="sub">An interactive tutorial of ECDQ dither synchronization, answering the following questions: Why does intentionally adding noise (dither) improve the quality of quantized data? Why does a naive implementation of dither harm data compressability? and How does synchronized rounding of dithered data eliminate most of that harm?</span></h1>
 </header>
 
 <div class="citeas">Photonymous (2026). <i>ECDQ: An Interactive Tutorial on Entropy-Constrained Dithered
@@ -273,13 +273,13 @@ residue. With uniform
 <span class="m">d</span> the quantity <span class="m">e[n]</span> is <b>uniform on
 [-0.5, 0.5) and statistically independent of <span class="m">x[n]</span></b>, provided the quantizer
 does not clip. The error stops being a function of the signal and becomes genuine additive noise.
-Real digital dither uses a close finite approximation to this ideal distribution.</p>
+Digital dither uses a close approximation to this ideal distribution.</p>
 
 <h3>Information below the LSB survives</h3>
 
-<p>If a signal is smaller than one quantization step, plain rounding can send it to zero and erase it.
-Dithered rounding does not destroy it. The signal is still there, encoded in <em>how often</em> the
-output flips between levels, and averaging can reveal it beneath the noise.</p>
+<p>If a signal is smaller than one quantization step, plain rounding can round it to zero, destroying it.
+Dithered rounding preserves it instead. The signal is still there, encoded in <em>how often</em> the
+output flips between levels, and averaging can recover the signal lurking beneath the noise.</p>
 
 <div class="fig">
   <div class="fig-head"><span class="tag">FIG 2</span><span class="ttl">A signal smaller than one LSB, recovered by averaging</span></div>
@@ -301,15 +301,14 @@ output flips between levels, and averaging can reveal it beneath the noise.</p>
   </div>
 </div>
 
-<p>Set the amplitude below 0.5 LSB. The undithered trace stays at zero no matter how many averages
-you take. The dithered trace, by contrast, converges to the true sine. Averaging cannot remove a
-repeatable, signal-shaped error, but it can reduce uncorrelated noise; dither converts the former into
-the latter.</p>
+<p>Set the amplitude below 0.5 LSB. The undithered trace stays at zero because averaging can't help.
+The dithered trace, by contrast, converges to the true sine. Averaging cannot remove a
+repeatable, signal-shaped error, but it can reduce uncorrelated noise.</p>
 
 <div class="note">This figure averages repeated, independently dithered measurements of the same
 waveform to make the principle obvious. A single encoded sequence contains only one such realization.
-In practice the averaging may come from time, nearby samples, or a matched operation such as a Fourier
-transform: energy at the sine's frequency adds coherently while the dither noise mostly cancels.</div>
+In practice effective averaging may come from time, nearby samples, or an operation such as a Fourier
+transform: energy at the sine wave's frequency adds coherently while the dither noise mostly cancels.</div>
 
 <h3>The error stops depending on the signal</h3>
 
@@ -317,17 +316,26 @@ transform: energy at the sine's frequency adds coherently while the dither noise
   <div class="fig-head"><span class="tag">FIG 3</span><span class="ttl">Error plotted against input value</span></div>
   <div class="fig-body">
     <div class="cvhost" id="d3" data-h="270" data-h-mobile="540" data-mobile-at="900"></div>
-    <div class="note" style="margin:12px 0 0">Each dot is one sample. Horizontal axis is the true input in LSB units,
-    vertical axis is the resulting error. The white line is the average error at that input value.</div>
+    <div class="legend">
+      <span><i style="background:rgba(232,99,111,.8);width:5px;height:5px"></i>one sample, no dither</span>
+      <span><i style="background:rgba(78,201,167,.8);width:5px;height:5px"></i>one sample, subtractive dither</span>
+      <span><i style="background:var(--ink);height:2px"></i>mean error at that input value</span>
+      <span><i style="background:repeating-linear-gradient(90deg,var(--grid) 0 3px,transparent 3px 6px);height:2px"></i>&plusmn;&frac12; LSB bounds</span>
+      <span><i style="background:var(--grid);width:2px;height:10px"></i>quantization grid point</span>
+    </div>
+    <div class="note" style="margin:12px 0 0">The input here is not a signal: it is 2,600 test values
+    drawn uniformly at random from the range &plusmn;2.5 LSB, so every position within every
+    quantization cell gets probed. Each value is quantized once, and its error (reconstructed minus
+    true) is plotted against the value itself: horizontal axis is the true input in LSB units,
+    vertical axis is the resulting error. Time plays no role in this figure; it isolates how the
+    error depends on where the input lies relative to the rounding grid.</div>
   </div>
 </div>
 
-<p>In the no-dither panel the error is a perfect sawtooth: knowing <span class="m">x</span> tells you
-the error exactly. In the subtractive-dither panel the cloud is uniform and the conditional mean is
-flat at zero: knowing <span class="m">x</span> tells you nothing. That is what “independent of the
-signal” looks like.</p>
+<p>In the no-dither panel, the error is perfectly correlated to the signal. Knowing <span class="m">x</span> tells you exactly what the quantization error is going to be. In the subtractive-dither panel, the error is uniformly scattered, and the conditional mean is nearly
+flatlined: knowing <span class="m">x</span> tells you nothing about the quantization error at that point. That is what error which is “independent of the signal” looks like.</p>
 
-<h3>Distortion becomes a noise floor</h3>
+<h3>Distortion is whitened</h3>
 
 <div class="fig">
   <div class="fig-head"><span class="tag">FIG 4</span><span class="ttl">Spectrum of a quantized tone</span></div>
@@ -345,17 +353,14 @@ signal” looks like.</p>
 </div>
 
 <p>Without dither, the quantizer produces harmonics that were not present in the input, and a tone
-below half an LSB disappears entirely. With dither, the original peak remains in the right place above
-a flat noise floor. For moderate and large signals the total error energy is often similar, but its
-distribution is very different. For a very small signal the undithered RMS can be lower only because
-the output has collapsed to zero and lost the signal. This is also why dither is standard practice in
-digital audio.</p>
+below half an LSB disappears entirely. With dither, the original peak remains, and the harmonics
+are spread out uniformly (whitened) to create a broad-band noise floor. For moderate and large signals the total error energy is often similar, but its
+distribution is very different. For a small signal the undithered RMS can be lower because
+the output has collapsed to all zeros (or mostly zeros).</p>
 
-<div class="note">If the decoder cannot subtract <span class="m">d</span>, some deliberate noise must
-remain in the result. A rectangular distribution can remove the average error but leaves its strength
-dependent on the signal. The usual triangular distribution removes that dependence too, at a total
-noise power three times the subtractive case (about 4.8 dB more). Subtractive dither avoids that extra
-cost whenever the encoder and decoder can regenerate the same <span class="m">d</span>.</div>
+<div class="note">In applications where dither cannot be subtracted during reconstruction, the dither
+noise remains. Rectangular dither decorrelates the quantization error from the signal (removes the
+bias imparted on the signal), but the magnitude of the error (not the sign) remains dependent on the signal. A solution to this is to use a triangular distribution for the dither instead. This removes the magnitude dependence, but results in a total noise power three times that of the subtractive case (about 4.8 dB more). Subtractive dither avoids that extra cost in applications where the encoder and decoder can both generate the same dither sequence.</div class="note">
 
 <!-- =============================================================== -->
 <h2><span class="num">SECTION 3</span>Predictive coding and residual entropy</h2>
@@ -1206,7 +1211,7 @@ function fft(re, im){
     txt(ctx,'frequency bin',(f.L+f.R)/2,h-9,C.faint,'center','10px ui-monospace,monospace');
     if(A<0.5){
       var gone = s0[BIN] < -110;
-      if(gone) txt(ctx,'undithered output is identically zero: the tone is gone',
+      if(gone) txt(ctx,'undithered output is all-zeros: the tone is gone',
                    f.L+10,f.T+14,C.red,'left','600 12px ui-monospace,monospace');
     }
   });
