@@ -128,7 +128,7 @@ a.cite:hover{color:var(--ink)}
 <span class="sub">An interactive tutorial of ECDQ dither synchronization, answering the following questions: Why does intentionally adding noise (dither) improve the quality of quantized data? Why does a naive implementation of dither harm data compressability? and How does synchronized rounding of dithered data eliminate most of that harm?</span></h1>
 </header>
 
-<div class="citeas">Photonymous (2026). <i>ECDQ: An Interactive Tutorial on Entropy-Constrained Dithered
+<div class="citeas">Erik Buehler (2026). <i>ECDQ: An Interactive Tutorial on Entropy-Constrained Dithered
 Quantization.</i><br><a href="https://photonymous.github.io/ECDQ_Tutorial/">https://photonymous.github.io/ECDQ_Tutorial/</a></div>
 
 <p>This tutorial is about storing or transmitting a signal (1D data like audio, 2D data like images, 3D data like flow velocities, etc.) using fewer
@@ -156,7 +156,7 @@ error while mitigating the bit-rate impact. This tutorial introduces and demonst
 <p>Here <span class="m">p</span> is the prediction, <span class="m">&Delta;</span> is the grid
 spacing, <span class="m">d[n]</span> is the dither value for sample <span class="m">n</span>, and
 the result <span class="m">p<sub>q</sub></span> is the prediction, quantized.
-Before rounding a <em>prediction</em>, add the same dither value used for the <em>real sample</em> at
+Before rounding a <em>prediction</em>, add the same dither value used for the <em>true sample</em> at
 that position. The sections below explain why this keeps the two rounding operations synchronized.</p>
 
 <div class="tldr">
@@ -495,12 +495,14 @@ or greatly reduce the entropy penalty of dither.</li>
 
 
 <!-- =============================================================== -->
-<h2><span class="num">SECTION 6</span>A causal 1D toy prediction loop</h2>
+<h2><span class="num">SECTION 6</span>A causal 1D predictor example</h2>
 
-<p>The example below steps a deliberately causal, one-dimensional loop over a synthetic signal, with
-toy predictors whose behavior is easy to inspect. Here <em>causal</em> means that a prediction uses
+<p>The example below steps a deliberately causal, one-dimensional predictor over a synthetic signal.
+Different 1D "toy" predictors may be selected. Their behavior is easy to inspect. Here <em>causal</em>
+means that a prediction uses
 only earlier 1D samples that the decoder has already reconstructed. The block diagram that follows it
-shows the general ECDQ loop; it updates as you toggle the two ECDQ options, and the numbers beneath
+shows the general ECDQ loop; it updates as you toggle the two ECDQ components on and off (both on is
+ECDQ; the other settings are partial configurations shown for comparison), and the numbers beneath
 each node show the values at the current sample.</p>
 
 <div class="fig">
@@ -558,20 +560,20 @@ each node show the values at the current sample.</p>
     <div class="ctls">
       <div class="ctl"><label>sample n</label><input type="range" id="d6-n2" min="0" max="1023" step="1" value="200"><output id="d6-n2-o"></output></div>
     </div>
-    <div class="note" style="margin:8px 0 4px">This figure is synchronized with Fig 6: the ECDQ
-    toggles and sample sliders here are linked to the ones there, and the numbers beneath the nodes
-    are the loop's values at that sample of Fig 6's signal.</div>
+    <div class="note" style="margin:8px 0 4px">This figure is synchronized with Fig 6: the
+    toggles and sliders here are linked to the ones there, and the numbers beneath the nodes
+    are the loop's values at that sample in Fig 6's signal.</div>
     <div class="mobile-hint">Swipe horizontally to follow the complete loop.</div>
     <div class="diagram-sub">Encoder</div>
     <div class="diagram-scroll"><svg class="diagram" id="d6svgE" viewBox="0 24 920 274" aria-label="ECDQ encoder block diagram"></svg></div>
     <div class="diagram-sub">Decoder</div>
     <div class="diagram-scroll"><svg class="diagram" id="d6svgD" viewBox="0 88 920 224" aria-label="ECDQ decoder block diagram"></svg></div>
-    <div class="note" style="margin-top:4px">The predictor row, residual, and reconstruction row are
-    drawn identically and at the same positions in both diagrams because they <em>are</em> identical:
+    <div class="note" style="margin-top:4px">The prediction, residual, and reconstruction processes are
+    drawn identically in both diagrams because they <em>are</em> identical:
     the encoder contains a full copy of the decoder, so both sides rebuild the same
-    <span class="m">y[n]</span> from the same residuals. Amber marks every place the shared dither
+    <span class="m">y[n]</span> from the same residual stream. Orange marks every place the shared dither
     value <span class="m">d[n]</span> is consumed. It is never stored or transmitted; both sides
-    regenerate it from the index and an agreed seed. Green marks the two ECDQ modifications.</div>
+    regenerate it from the sample index and a shared seed. Green marks the ECDQ modifications.</div>
     <dl class="symdefs">
       <dt>x[n]</dt><dd>the true input sample at index <span class="m">n</span>. Only the encoder ever sees it.</dd>
       <dt>&Delta;</dt><dd>the quantizer step size, one LSB at the chosen bit depth. Values shown beneath the nodes are in units of &Delta;.</dd>
@@ -581,13 +583,13 @@ each node show the values at the current sample.</p>
       <dt>p</dt><dd>the prediction of <span class="m">x[n]</span>, computed from the history of past reconstructions <span class="m">y[]</span>.</dd>
       <dt>p_q</dt><dd>the prediction, quantized: <span class="m">round(p/&Delta; + d)</span> with dither injection on, <span class="m">round(p/&Delta;)</span> without.</dd>
       <dt>r[n]</dt><dd>the residual <span class="m">q[n] &minus; p_q</span>: the only value stored or transmitted.</dd>
-      <dt>y[n]</dt><dd>the reconstruction: <span class="m">(q[n] &minus; d[n])&middot;&Delta;</span> with de-dithering on, <span class="m">q[n]&middot;&Delta;</span> without. It feeds the shared history for future predictions.</dd>
+      <dt>y[n]</dt><dd>the reconstruction. Both sides first rebuild <span class="m">q[n] = p_q + r[n]</span> (the decoder never receives <span class="m">q[n]</span> itself, only <span class="m">r[n]</span>), then form <span class="m">y[n] = (q[n] &minus; d[n])&middot;&Delta;</span> with de-dithering on, <span class="m">q[n]&middot;&Delta;</span> without. It feeds the shared history for future predictions.</dd>
     </dl>
   </div>
 </div>
 
-<p>The bar chart compares five configurations on the same signal and bit depth. Only the two ECDQ
-options change.</p>
+<p>The bar chart compares five configurations on the same signal and bit depth. Only the dither
+configurations change.</p>
 
 <div class="fig">
   <div class="fig-head"><span class="tag">FIG 8</span><span class="ttl">Which half of ECDQ does the work</span></div>
@@ -610,24 +612,23 @@ options change.</p>
 
 <p>With the default four-tap predictor, naive dither has the highest entropy. De-dithering alone helps
 very little: it gives the predictor a more accurate input, but the result is still rounded against the
-wrong thresholds. Dither injection alone recovers most of the loss. Using both options brings ECDQ close to
-the no-dither baseline while retaining the signal-quality benefits from Section 2.</p>
+wrong thresholds. Dither injection alone recovers most of the loss. Only the combination of both is
+ECDQ, and it comes close to the no-dither baseline while retaining the signal-quality benefits from
+Section 2.</p>
 
-<h3>The two halves are not independent</h3>
+<h3>Dither injection and de-dithering are not independent</h3>
 
-<p>Change the predictor in Fig 6 to <b>previous sample</b>. The naive, de-dither-only, and
-inject-d[n]-only bars become <em>exactly</em> equal. This result follows from the arithmetic rather than a
-rendering error.</p>
-
-<p>A single-tap predictor reading reconstructions that have not been de-dithered computes
+<p>Change the predictor to <b>previous sample</b>. The naive, de-dither-only, and
+inject-d[n]-only bars become <em>exactly</em> equal. A single-tap predictor reading reconstructions that have not been de-dithered computes
 <span class="m">p = y[n-1] = q[n-1]&middot;&Delta;</span>. Divide by <span class="m">&Delta;</span> and
-that is an <em>exact integer</em>. Adding a dither of magnitude below half a step to an integer and
-rounding returns the same integer. Injecting the dither therefore has no effect.</p>
+that is an <em>exact integer</em>. The dither is always smaller than half a step, so adding it never
+moves the value across a rounding threshold: the result rounds back to the same integer it started
+on. Injecting the dither therefore has no effect.</p>
 
 <div class="key"><b>Dither injection can only help when the prediction lands between levels.</b> What puts it
-between levels is de-dithering, which turns integer reconstructions into real valued ones. In the 4 tap
+between levels is de-dithering, which turns integer reconstructions into fractional ones. In the 4 tap
 case averaging four integers does some of that work too, which is why dither injection alone already helps
-there. The two ECDQ options are therefore coupled: dither injection aligns thresholds, while de-dithering
+there. The two components of ECDQ are therefore coupled: dither injection aligns thresholds, while de-dithering
 allows the prediction to fall between quantization levels.</div>
 
 <p>The four-tap linear extrapolator fits a straight line to
@@ -635,8 +636,8 @@ allows the prediction to fall between quantization levels.</div>
 weights are equivalent to
 <span class="m">p = -0.5y[n-4] + 0.5y[n-2] + y[n-1]</span>; the coefficient of
 <span class="m">y[n-3]</span> cancels after the fit. Because these weights are fractional, the
-prediction can land between levels even without de-dithering, so dither injection alone can help. Using both
-options still gives the complete ECDQ loop: de-dithering removes past offsets and dither injection aligns the
+prediction can land between levels even without de-dithering, so dither injection alone can help. The
+complete ECDQ loop still uses both components: de-dithering removes past offsets and dither injection aligns the
 current rounding thresholds.</p>
 
 <!-- =============================================================== -->
@@ -648,7 +649,7 @@ remaining difference comes from the <b>quiet zone</b>.</p>
 <p>In nearly still regions, every sample is smaller than one step. Without dither, the samples round
 to zero, the predictor returns zero, and long runs of residuals cost almost nothing. Dither maps these
 near-zero samples to 0 or &plusmn;1, producing occasional nonzero residuals. Unlike the earlier
-synchronization problem, these residuals carry real sub-LSB detail that plain rounding discards.</p>
+synchronization problem, these residuals carry genuine sub-LSB detail that plain rounding discards.</p>
 
 <p>The cost depends on how much of the signal lies in the quiet zone, which shrinks quickly as
 resolution improves. At the same time, de-dithered reconstructions improve the prediction. At some bit
@@ -713,7 +714,8 @@ finite resolution and why the two curves converge rather than coincide.</div>
 <h2><span class="num">SECTION 8</span>From toy to implementation: the loop must be bit-exact</h2>
 
 <p>This tutorial writes the signal <span class="m">x[n]</span>, the dither <span class="m">d[n]</span>,
-and the reconstruction <span class="m">y[n]</span> as real numbers, and that is the right way to
+and the reconstruction <span class="m">y[n]</span> as continuous quantities, which in code would
+ordinarily become floating-point numbers (<em>floats</em>), and that is the right way to
 understand the mechanisms. But it hides a practical requirement. In a closed prediction loop, the
 predictor feeds on reconstructions, so the encoder and the decoder must compute <b>bit-identical</b>
 <span class="m">y[n]</span> values, on every sample, forever. If floating-point arithmetic on the two
@@ -725,11 +727,11 @@ history every later prediction reads. The decoder drifts away from the encoder a
 This is the same class of failure this page attributes to naive dither, two rounding
 operations falling out of agreement, except caused by the arithmetic itself.</p>
 
-<p>The remedy used by real lossless and near-lossless coders is to define every operation inside the
+<p>The remedy used by production lossless and near-lossless coders is to define every operation inside the
 loop over integers, where arithmetic is exact on every platform. Represent the input at a finer
 integer scale: let <span class="m">X</span> be an integer at resolution
 <span class="m">&Delta;/2<sup>K</sup></span>, so <span class="m">K</span> extra bits stand in for
-the &ldquo;real&rdquo; value. Draw the dither as an integer
+the continuous value. Draw the dither as an integer
 <span class="m">u[n]</span> uniform on <span class="m">{0, &hellip;, 2<sup>K</sup>-1}</span> from an
 integer PRNG (the generator used by this page is already pure integer arithmetic). Dithered
 quantization then collapses to an add and a shift:</p>
@@ -748,7 +750,8 @@ construction rather than hoped for.</p>
 
 <p>The figures on this page are exempt from this concern only because their encoder and decoder are
 the same computation running in the same arithmetic engine, so they cannot disagree with themselves.
-Read the real-valued equations here as exact arithmetic; build them as integer arithmetic.</p>
+Read the continuous-valued equations here as exact arithmetic; build them as integer arithmetic,
+not floats.</p>
 
 <h2><span class="num">SECTION 9</span>Summary</h2>
 
@@ -763,7 +766,7 @@ residuals, increasing residual entropy. ECDQ avoids this mismatch by using the s
 synchronize both rounding operations and by forming predictions from de-dithered reconstructions.
 Prediction accuracy once again determines residual sparsity rather than the incidental dither value.</p>
 
-<p>A real rate tradeoff remains at coarse resolution. Dither preserves sub-LSB detail in quiet regions
+<p>A genuine rate tradeoff remains at coarse resolution. Dither preserves sub-LSB detail in quiet regions
 that undithered quantization would collapse to zero, so the added information can initially cost bits.
 As resolution and prediction quality improve, that quiet-zone penalty shrinks and the benefits of
 cleaner reconstructed history can offset it. The exact entropy curves and crossover points depend on
