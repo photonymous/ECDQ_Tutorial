@@ -370,34 +370,36 @@ are locally correlated, so nearby samples tend to be similar. A predictive coder
 sample from values it has already decoded and stores only the correction.</p>
 
 <div class="eq">
-p        = predict( y[n-K] .. y[n-1] )   <span class="c">// a guess, from previously decoded values</span><br>
-p<sub>q</sub>       = round( p / &Delta; )             <span class="c">// the guess, on the integer grid</span><br>
+p        = predict( y[n-K] .. y[n-1] )   <span class="c">// the prediciton, from previously decoded values</span><br>
+p<sub>q</sub>       = round( p / &Delta; )             <span class="c">// the prediciton, quantized to the integer grid</span><br>
 r[n]     = q[n] - p<sub>q</sub>                 <span class="c">// the residual: this is what gets stored</span>
 </div>
 
-<p>The decoder receives <span class="m">r[n]</span>, recomputes the identical prediction from its own
-copy of the already decoded values, and recovers
+<p>The decoder receives the residual stream <span class="m">r[n]</span>, recomputes the identical
+prediction from its own
+copy of the already decoded values, and recovers the quantized version of the signal
 <span class="m">q[n] = p<sub>q</sub> + r[n]</span>. Encoder and decoder run the same loop and stay in
 lockstep. This is a <b>closed loop</b> coder: the predictor must feed on <em>reconstructions</em>, never
-on originals, because reconstructions are all the decoder will have.</p>
+on originals, because reconstructions are all the decoder has access to.</p>
 
 <p>This has two practical consequences.</p>
 
 <ul>
 <li><b>The residual histogram gives a useful first estimate of file size.</b> If each residual is
-treated independently, its ideal average cost is
+treated independently, its ideal average cost (entropy) is
 <span class="m">H = -&Sigma; p&middot;log<sub>2</sub>(p)</span> bits. This is not a hard lower bound for the
 whole stream: a compressor can do better when it finds predictable runs and patterns.</li>
-<li><b>Long runs of zeros are especially cheap.</b> A stream that is 85% zeros often costs well under
-one bit per sample. Replacing many of those zeros with a mix of -1, 0 and +1 usually makes both the
-histogram and the sequence harder to compress.</li>
+<li><b>Long runs of zeros are especially cheap.</b> A residual stream that is 85% zeros often costs 
+well under one bit per sample. Replacing many of those zeros with a mix of -1, 0 and +1 usually makes 
+both the histogram and the sequence harder to compress.</li>
 </ul>
 
 <!-- =============================================================== -->
 <h2><span class="num">SECTION 4</span>Why naive dither hurts compression</h2>
 
 <p>Dither provides the signal-quality benefits shown in Section 2, while predictive coding benefits
-from a residual stream dominated by zeros. A naive combination works against that goal.</p>
+from a residual stream dominated by zeros (or very small values). A naive implementation allows dither to
+balloon the entropy of the residual stream.</p>
 
 <p>Consider a sample where the predictor is <em>perfect</em>: the prediction <span class="m">p</span>
 equals the true value <span class="m">x[n]</span> exactly. Without dither the residual is exactly
@@ -411,18 +413,14 @@ r[n] = q[n] - p<sub>q</sub>                <span class="c">// = 0 or &plusmn;1 a
 
 <p>The dither shifts the sample's rounding threshold but not the prediction's, so the two often round
 to different integers. Across a sequence, even a <em>perfect</em> predictor lands on the wrong integer for
-about a quarter of samples, and a less accurate one does worse. Flat regions that once produced long
-runs of zero residuals now contain a mixture of -1, 0, and +1, increasing residual entropy even though
-the prediction itself is accurate.</p>
-
-<p>Some of that increase represents real sub-LSB information, but most of it comes from
-<em>desynchronizing two rounding operations that should agree</em>. Synchronizing them removes most of
-the extra cost.</p>
+about a quarter of samples, and a less accurate one does worse. Flat regions that would have produced long
+runs of zero-residuals now contain a mixture of -1, 0, and +1, increasing the entropy of the residual 
+even though the prediction itself is accurate.</p>
 
 <!-- =============================================================== -->
-<h2><span class="num">SECTION 5</span>Synchronized rounding on a number line</h2>
+<h2><span class="num">SECTION 5</span>Synchronized rounding</h2>
 
-<p>Figure 5 shows the central mechanism.</p>
+<p>Figure 5 shows the central mechanism using a number line example.</p>
 
 <p>Rounding partitions the number line into cells. <span class="m">round(v) = k</span> exactly when
 <span class="m">v</span> lies in the cell <span class="m">[k-0.5, k+0.5)</span>. Adding a dither
@@ -466,10 +464,12 @@ prediction quality. Push the prediction past a threshold and the probability cha
 become very large, and in one direction it can reach 100 percent.</p>
 
 <p>Across a sequence, this leaves about a quarter of residuals nonzero even with a <em>perfect</em>
-predictor. The residual rate no longer tracks prediction quality, so improving the predictor does not
-help.</p>
+predictor. The bits spent on residuals are determined by where the samples happen to sit relative to
+the rounding thresholds, not by how close the predictions come to the truth. A highly accurate
+predictor would therefore produce a similar bit rate to a mediocre predictor, violating
+expectation.</p>
 
-<p>Switch to <b>ECDQ</b> mode and both lanes receive the same threshold shift. Sweep <span class="m">d</span>
+<p>Switch to <b>ECDQ</b> and both lanes receive the same threshold shift. Sweep <span class="m">d</span>
 through its whole range and the residual stays pinned at zero, except in a narrow band where a
 threshold happens to fall <em>between</em> the two values. Move the prediction slider again and compare
 the last two readouts, which now track each other digit for digit:</p>
@@ -482,19 +482,17 @@ step. The probability of a nonzero residual depends only on prediction accuracy,
 de-dithered reconstruction <span class="m">y = (q - d)&middot;&Delta;</span>. Its remaining error is
 centered on zero, has a fixed noise power, and is unrelated to the signal. That makes it a more
 consistent predictor input and often reduces <span class="m">|x - p|</span>, which in turn reduces the
-number of nonzero residuals. ECDQ therefore has two parts:</p>
+residual entropy. ECDQ therefore has two parts:</p>
 
 <ul>
 <li><b>Dither injection:</b> add the dither <span class="m">d[n]</span> before rounding the
 prediction, just as it is added before rounding the true sample. This aligns the thresholds and
 removes the synchronization penalty.</li>
 <li><b>De-dither:</b> predict from <span class="m">(q - d)&middot;&Delta;</span> rather than
-<span class="m">q&middot;&Delta;</span>. This improves the prediction and can eventually make the dithered
-stream smaller than the undithered one.</li>
+<span class="m">q&middot;&Delta;</span>. This improves the prediction and can eliminate
+or greatly reduce the entropy penalty of dither.</li>
 </ul>
 
-<p>These are often described as separate refinements, but some predictors get no benefit from
-dither injection unless de-dithering is also enabled.</p>
 
 <!-- =============================================================== -->
 <h2><span class="num">SECTION 6</span>A causal 1D toy prediction loop</h2>
