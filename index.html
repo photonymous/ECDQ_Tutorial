@@ -77,6 +77,11 @@ button.on{background:rgba(90,169,230,.16);border-color:var(--blue);color:#cde6fb
 .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12.5px;color:var(--dim);margin-top:12px}
 .legend i{display:inline-block;width:17px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
 
+.symdefs{display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;margin-top:12px;
+  font-size:13px;color:var(--dim);line-height:1.5}
+.symdefs dt{font-family:var(--mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+.symdefs dd{margin:0}
+
 svg.diagram{width:100%;height:auto;display:block}
 /* font only: a fill rule here would override the per-element fill attributes */
 svg text{font-family:var(--mono)}
@@ -439,30 +444,14 @@ injection unless de-dithering is also enabled.</p>
 <!-- =============================================================== -->
 <h2><span class="num">SECTION 6</span>A causal 1D toy prediction loop</h2>
 
-<p>The block diagram below shows the general ECDQ loop. The numerical example that follows it is
-deliberately causal and one-dimensional, with toy predictors whose behavior is easy to inspect. The
-diagram updates as you toggle the two ECDQ options, and the numbers beneath each node show the values
-at the current sample. Here <em>causal</em> means that a prediction uses only earlier 1D samples that
-the decoder has already reconstructed.</p>
+<p>The example below steps a deliberately causal, one-dimensional loop over a synthetic signal, with
+toy predictors whose behavior is easy to inspect. Here <em>causal</em> means that a prediction uses
+only earlier 1D samples that the decoder has already reconstructed. The block diagram that follows it
+shows the general ECDQ loop; it updates as you toggle the two ECDQ options, and the numbers beneath
+each node show the values at the current sample.</p>
 
 <div class="fig">
-  <div class="fig-head"><span class="tag">FIG 6</span><span class="ttl">The ECDQ prediction loop</span></div>
-  <div class="fig-body">
-    <div class="ctls">
-      <label class="chk"><input type="checkbox" id="d6-dither" checked> subtractive dither on</label>
-      <label class="chk" id="d6-dd-l"><input type="checkbox" id="d6-dedither" checked> de-dither before predicting</label>
-      <label class="chk" id="d6-in-l"><input type="checkbox" id="d6-inject" checked> inject d[n] into prediction rounding</label>
-    </div>
-    <div class="mobile-hint">Swipe horizontally to follow the complete loop.</div>
-    <div class="diagram-scroll"><svg class="diagram" id="d6svg" viewBox="0 0 920 372" aria-label="ECDQ prediction loop block diagram"></svg></div>
-    <div class="note" style="margin-top:4px">Amber marks the three places the shared dither value
-    <span class="m">d[n]</span> is consumed. It is never stored or transmitted; both sides regenerate it
-    from the index and an agreed seed. Green marks the two ECDQ modifications.</div>
-  </div>
-</div>
-
-<div class="fig">
-  <div class="fig-head"><span class="tag">FIG 7</span><span class="ttl">Stepping the loop over a synthetic signal</span></div>
+  <div class="fig-head"><span class="tag">FIG 6</span><span class="ttl">Stepping the loop over a synthetic signal</span></div>
   <div class="fig-body">
     <div class="ctls">
       <div class="ctl"><label>bits</label><input type="range" id="d6-bits" min="6" max="12" step="1" value="8"><output id="d6-bits-o"></output></div>
@@ -475,6 +464,11 @@ the decoder has already reconstructed.</p>
         </select></div>
       <div class="ctl"><label>sample n</label><input type="range" id="d6-n" min="0" max="1023" step="1" value="200"><output id="d6-n-o"></output></div>
       <button id="d6-play">play</button>
+    </div>
+    <div class="ctls">
+      <label class="chk"><input type="checkbox" id="d6-dither" checked> subtractive dither on</label>
+      <label class="chk" id="d6-dd-l"><input type="checkbox" id="d6-dedither" checked> de-dither before predicting</label>
+      <label class="chk" id="d6-in-l"><input type="checkbox" id="d6-inject" checked> inject d[n] into prediction rounding</label>
     </div>
     <div class="cvhost" id="d6sig" data-h="270"></div>
     <div class="legend">
@@ -501,15 +495,54 @@ the decoder has already reconstructed.</p>
   </div>
 </div>
 
+<div class="fig">
+  <div class="fig-head"><span class="tag">FIG 7</span><span class="ttl">The ECDQ prediction loop</span></div>
+  <div class="fig-body">
+    <div class="ctls">
+      <div class="ctl"><label>sample n</label><input type="range" id="d6-n2" min="0" max="1023" step="1" value="200"><output id="d6-n2-o"></output></div>
+    </div>
+    <div class="note" style="margin:8px 0 4px">This figure is synchronized with Fig 6: both sample
+    sliders move the same cursor, Fig 6's ECDQ toggles reshape this diagram, and the numbers beneath
+    the nodes are the loop's values at that sample of Fig 6's signal.</div>
+    <div class="mobile-hint">Swipe horizontally to follow the complete loop.</div>
+    <div class="diagram-scroll"><svg class="diagram" id="d6svg" viewBox="0 0 920 372" aria-label="ECDQ prediction loop block diagram"></svg></div>
+    <div class="note" style="margin-top:4px">Amber marks the three places the shared dither value
+    <span class="m">d[n]</span> is consumed. It is never stored or transmitted; both sides regenerate it
+    from the index and an agreed seed. Green marks the two ECDQ modifications.</div>
+    <dl class="symdefs">
+      <dt>x[n]</dt><dd>the true input sample at index <span class="m">n</span>. Only the encoder ever sees it.</dd>
+      <dt>&Delta;</dt><dd>the quantizer step size, one LSB at the chosen bit depth. Values shown beneath the nodes are in units of &Delta;.</dd>
+      <dt>d[n]</dt><dd>the subtractive dither for sample <span class="m">n</span>: a pseudorandom offset in [&minus;&frac12;, &frac12;) LSB from <span class="m">PRNG(seed, n)</span>, regenerated identically on both sides.</dd>
+      <dt>round</dt><dd>rounding to the nearest integer, i.e. quantization to the nearest code.</dd>
+      <dt>q[n]</dt><dd>the quantized code of the true sample: <span class="m">round(x/&Delta; + d)</span>.</dd>
+      <dt>p</dt><dd>the prediction of <span class="m">x[n]</span>, computed from the history of past reconstructions <span class="m">y[]</span>.</dd>
+      <dt>p_q</dt><dd>the prediction, quantized: <span class="m">round(p/&Delta; + d)</span> with injection on, <span class="m">round(p/&Delta;)</span> without.</dd>
+      <dt>r[n]</dt><dd>the residual <span class="m">q[n] &minus; p_q</span>: the only value stored or transmitted.</dd>
+      <dt>y[n]</dt><dd>the reconstruction: <span class="m">(q[n] &minus; d[n])&middot;&Delta;</span> with de-dithering on, <span class="m">q[n]&middot;&Delta;</span> without. It feeds the shared history for future predictions.</dd>
+    </dl>
+  </div>
+</div>
+
 <p>The bar chart compares five configurations on the same signal and bit depth. Only the two ECDQ
 options change.</p>
 
 <div class="fig">
   <div class="fig-head"><span class="tag">FIG 8</span><span class="ttl">Which half of ECDQ does the work</span></div>
   <div class="fig-body">
+    <div class="ctls">
+      <div class="ctl"><label>bits</label><input type="range" id="d8-bits" min="6" max="12" step="1" value="8"><output id="d8-bits-o"></output></div>
+      <div class="ctl"><label>signal gain</label><input type="range" id="d8-gain" min="0.15" max="3" step="0.05" value="0.3"><output id="d8-gain-o"></output></div>
+      <div class="ctl"><label>predictor</label>
+        <select id="d8-pred">
+          <option value="avg4">4 tap causal average</option>
+          <option value="prev">previous sample</option>
+          <option value="lin">4 tap linear extrapolation</option>
+        </select></div>
+    </div>
     <div class="cvhost" id="d6bars" data-h="230"></div>
-    <div class="note" style="margin:12px 0 0">Lower is better. Follow the settings in Fig 7; this chart
-    tracks the same bit depth, gain and predictor.</div>
+    <div class="note" style="margin:12px 0 0">Lower is better. These controls are synchronized with
+    Fig 6; the chart always compares all five dither configurations, so Fig 6's ECDQ toggles do not
+    affect it.</div>
   </div>
 </div>
 
@@ -520,7 +553,7 @@ the no-dither baseline while retaining the signal-quality benefits from Section 
 
 <h3>The two halves are not independent</h3>
 
-<p>Change the predictor in Fig 7 to <b>previous sample</b>. The naive, de-dither-only, and
+<p>Change the predictor in Fig 6 to <b>previous sample</b>. The naive, de-dither-only, and
 inject-only bars become <em>exactly</em> equal. This result follows from the arithmetic rather than a
 rendering error.</p>
 
@@ -1226,7 +1259,8 @@ function fft(re, im){
 (function(){
   var N=1024;
   var els={
-    bits:$('d6-bits'), gain:$('d6-gain'), pred:$('d6-pred'), n:$('d6-n'),
+    bits:$('d6-bits'), gain:$('d6-gain'), pred:$('d6-pred'), n:$('d6-n'), n2:$('d6-n2'),
+    bits2:$('d8-bits'), gain2:$('d8-gain'), pred2:$('d8-pred'),
     dither:$('d6-dither'), dedither:$('d6-dedither'), inject:$('d6-inject')
   };
   var state={ x:null, run:null, bars:null, step:0, quiet:0, Hnd:0 };
@@ -1429,6 +1463,10 @@ function fft(re, im){
 
     $('d6-bits-o').textContent=bits+' bits';
     $('d6-gain-o').textContent=gain.toFixed(2);
+    // mirror the Fig 8 copies of these controls
+    els.bits2.value=bits; $('d8-bits-o').textContent=bits+' bits';
+    els.gain2.value=gain; $('d8-gain-o').textContent=gain.toFixed(2);
+    els.pred2.value=pred;
     // enable/disable ECDQ switches
     var on=els.dither.checked;
     els.dedither.disabled=!on; els.inject.disabled=!on;
@@ -1598,10 +1636,13 @@ function fft(re, im){
   }
   function onStep(){
     state.step=+els.n.value;
+    els.n2.value=state.step;
     $('d6-n-o').textContent=state.step;
+    $('d6-n2-o').textContent=state.step;
     sigCv.render(); resCv.render(); updateDiagramValues();
   }
   els.n.oninput=onStep;
+  els.n2.oninput=function(){ els.n.value=els.n2.value; onStep(); };
 
   /* click the plot (or strip), then step one sample at a time with arrow keys */
   function setN(v){
@@ -1623,6 +1664,12 @@ function fft(re, im){
     els[k].addEventListener('input',recompute);
     els[k].addEventListener('change',recompute);
   });
+  /* Fig 8 copies write through to the Fig 6 originals, then recompute mirrors back */
+  [['bits2','bits'],['gain2','gain'],['pred2','pred']].forEach(function(p){
+    function sync(){ els[p[1]].value=els[p[0]].value; recompute(); }
+    els[p[0]].addEventListener('input',sync);
+    els[p[0]].addEventListener('change',sync);
+  });
 
   var playing=false, timer=0;
   $('d6-play').onclick=function(){
@@ -1635,7 +1682,9 @@ function fft(re, im){
   };
 
   state.step=+els.n.value;
+  els.n2.value=state.step;
   $('d6-n-o').textContent=state.step;
+  $('d6-n2-o').textContent=state.step;
   recompute();
 })();
 
