@@ -241,22 +241,22 @@ undithered error is small in RMS simply because the output gets rounded to a con
 becomes the signal itself. The RMS is low even though the signal has been completely lost. The next figure shows why RMS is not a useful measure in that case.</div>
 
 <!-- =============================================================== -->
-<h2><span class="num">SECTION 2</span>Dither: adding noise on purpose</h2>
+<h2><span class="num">SECTION 2</span>Dither: adding noise to improve signal quality</h2>
 
-<p>Dither is one extra term inside the rounding, and one matching subtraction on the way out:</p>
+<p>Subtractive dither employs one extra term inside the rounding operation, and one matching subtraction on the decoding side:</p>
 
 <div class="eq">
 q[n] = round( x[n] / &Delta; <span class="a">+ d[n]</span> ) <span class="c">// encode, with d[n] uniform on [-0.5, +0.5)</span><br>
-y[n] = ( q[n] <span class="a">- d[n]</span> ) &times; &Delta;  <span class="c">// decode, subtract the same d[n] back off</span>
+y[n] = ( q[n] <span class="a">- d[n]</span> ) &times; &Delta;  <span class="c">// decode, subtract the same d[n]</span>
 </div>
 
-<p>Because the same <span class="m">d[n]</span> is subtracted back off, this is called
+<p>Because the same <span class="m">d[n]</span> is subtracted (removed), this is called
 <b>subtractive dither</b>, an idea introduced by Roberts in 1962&nbsp;<a class="cite"
 href="#ref1">[1]</a>, with the conditions on <span class="m">d[n]</span> established by
 Schuchman&nbsp;<a class="cite" href="#ref2">[2]</a> and the theory surveyed by Lipshitz, Wannamaker,
 and Vanderkooy&nbsp;<a class="cite" href="#ref4">[4]</a>. It requires that the decoder can
 regenerate <span class="m">d[n]</span>
-exactly, which is easy: both sides run the same hash or PRNG on the sample index and a shared seed. No
+exactly, which is easy: both sides run the same hash or PRNG (pseudo-random number generator) on the sample index and a shared seed. No
 dither values are ever transmitted.</p>
 
 <p>With <span class="m">d[n]</span> uniform on [-0.5, +0.5), the encode step is exactly
@@ -707,7 +707,47 @@ reconstructions and therefore enters later predictions. That is why a small diff
 finite resolution and why the two curves converge rather than coincide.</div>
 
 <!-- =============================================================== -->
-<h2><span class="num">SECTION 8</span>Summary</h2>
+<h2><span class="num">SECTION 8</span>From toy to implementation: the loop must be bit-exact</h2>
+
+<p>This tutorial writes the signal <span class="m">x[n]</span>, the dither <span class="m">d[n]</span>,
+and the reconstruction <span class="m">y[n]</span> as real numbers, and that is the right way to
+understand the mechanisms. But it hides a practical requirement. In a closed prediction loop, the
+predictor feeds on reconstructions, so the encoder and the decoder must compute <b>bit-identical</b>
+<span class="m">y[n]</span> values, on every sample, forever. If floating-point arithmetic on the two
+sides differs by even one unit in the last place (a different math library, a compiler that
+fuses a multiply-add, a reordered summation in the predictor), a
+<span class="m">round()</span> near a threshold can land on a different integer. That changes
+<span class="m">p<sub>q</sub></span>, which changes <span class="m">y[n]</span>, which corrupts the
+history every later prediction reads. The decoder drifts away from the encoder and never recovers.
+This is the same class of failure this page attributes to naive dither, two rounding
+operations falling out of agreement, except caused by the arithmetic itself.</p>
+
+<p>The remedy used by real lossless and near-lossless coders is to define every operation inside the
+loop over integers, where arithmetic is exact on every platform. Represent the input at a finer
+integer scale: let <span class="m">X</span> be an integer at resolution
+<span class="m">&Delta;/2<sup>K</sup></span>, so <span class="m">K</span> extra bits stand in for
+the &ldquo;real&rdquo; value. Draw the dither as an integer
+<span class="m">u[n]</span> uniform on <span class="m">{0, &hellip;, 2<sup>K</sup>-1}</span> from an
+integer PRNG (the generator used by this page is already pure integer arithmetic). Dithered
+quantization then collapses to an add and a shift:</p>
+
+<div class="eq">q[n] = ( X[n] <span class="a">+ u[n]</span> ) &gt;&gt; K</div>
+
+<p>This is exactly <span class="m">round(x/&Delta; + d)</span> with
+<span class="m">d = (u + &frac12;)/2<sup>K</sup> - &frac12;</span>: a finite, uniform width-one
+dither, with no floating point anywhere. The reconstruction is kept as an integer at the same fine
+scale, <span class="m">Y[n] = q[n]&middot;2<sup>K</sup> - u[n]</span> plus a constant half-step
+offset, and is never converted to floating point inside the loop. The predictor is likewise defined
+over integer <span class="m">Y</span> with integer coefficients and a specified rounding rule for
+its divisions, which is how the predictors in formats such as FLAC and JPEG-LS are specified. Every
+quantity in the loop is then rigorously defined, and encoder&ndash;decoder agreement is guaranteed by
+construction rather than hoped for.</p>
+
+<p>The figures on this page are exempt from this concern only because their encoder and decoder are
+the same computation running in the same arithmetic engine, so they cannot disagree with themselves.
+Read the real-valued equations here as exact arithmetic; build them as integer arithmetic.</p>
+
+<h2><span class="num">SECTION 9</span>Summary</h2>
 
 <p>Uniform subtractive dither converts deterministic, signal-dependent quantization distortion into
 approximately additive, input-independent noise, provided the quantizer does not clip. This removes
