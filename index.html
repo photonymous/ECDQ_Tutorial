@@ -181,7 +181,7 @@ algorithms.</div>
 
 <p>Non-causal and higher-dimensional applications can use a neighborhood of samples surrounding
 each sample being predicted, giving better prediction performance. Such predictors will have different residual entropies,
-zero rates, dither penalties, and crossover points. <b>The specific numerical values shown here
+zero rates, dither penalties, and whether and where the rate curves cross. <b>The specific numerical values shown here
 are therefore not directly predictive of the non-causal or higher-dimensional cases.</b> However, the key phenomena generalize: undithered quantization creates
 signal-dependent structured error; naive dither can reduce the error structure at the expense of increased entropy; ECDQ aligns rounding thresholds to reduce the entropy.</p>
 
@@ -641,22 +641,33 @@ complete ECDQ loop still uses both components: de-dithering removes past offsets
 current rounding thresholds.</p>
 
 <!-- =============================================================== -->
-<h2><span class="num">SECTION 7</span>The quiet zone, and where dither starts winning</h2>
+<h2><span class="num">SECTION 7</span>The remaining cost of dither, and how it fades</h2>
 
 <p>At coarse quantization, ECDQ approaches the undithered baseline but does not quite reach it. The
 remaining difference comes from the <b>quiet zone</b>.</p>
 
-<p>In nearly still regions, every sample is smaller than one step. Without dither, the samples round
-to zero, the predictor returns zero, and long runs of residuals cost almost nothing. Dither maps these
-near-zero samples to 0 or &plusmn;1, producing occasional nonzero residuals. Unlike the earlier
-synchronization problem, these residuals carry genuine sub-LSB detail that plain rounding discards.</p>
+
+<p> In regions where most samples are below one quant step, without dither, the low-amplitude samples round
+to zero, the predictor returns zero, and long runs of residuals cost almost nothing (the "quiet zone").
+Dither maps these
+near-zero samples to 0 or &plusmn;1, producing occasional nonzero residuals. These extra bits are not
+waste of the kind Section 4 showed, where unsynchronized dither generated residuals that described
+only the dither itself. Here, whether a sample rounds to 0 or to &plusmn;1 depends on its actual
+sub-step amplitude, so the residuals record detail about the signal that plain rounding would have
+flattened to a run of zeros.</p>
 
 <p>The cost depends on how much of the signal lies in the quiet zone, which shrinks quickly as
-resolution improves. At the same time, de-dithered reconstructions improve the prediction. At some bit
-depth, the second effect overtakes the first.</p>
+resolution improves. At the same time, de-dithered reconstructions improve the prediction. So as the
+grid gets finer, two things happen at once: fewer samples are small enough to sit in the quiet zone,
+so the nonzero residuals that dither produces there (where undithered coding would emit a run of
+zeros) become rare and their entropy cost fades; and the
+predictor, fed on de-dithered history that resolves detail between grid levels, keeps getting more
+accurate relative to the step size, which makes dithered residuals cheaper to code. The rate gap
+between the dithered and undithered coders therefore narrows; in this toy setup the curves
+eventually meet and can even trade places.</p>
 
 <div class="fig">
-  <div class="fig-head"><span class="tag">FIG 9</span><span class="ttl">The crossover</span></div>
+  <div class="fig-head"><span class="tag">FIG 9</span><span class="ttl">The narrowing gap</span></div>
   <div class="fig-body">
     <div class="ctls">
       <div class="ctl"><label>predictor</label>
@@ -684,19 +695,18 @@ depth, the second effect overtakes the first.</p>
 <div class="key"><b>Do not generalize the crossover value.</b> This graph's rates and crossing points
 belong to its exact synthetic 1D signal, gain, finite sample count, and toy predictor. A non-causal or
 higher-dimensional predictor can exploit a much richer neighbourhood, moving the curves and their
-crossings considerably. What survives those numerical changes is the competition itself: quiet-zone
-detail costs entropy at coarse resolution, while synchronized dither and de-dithered history let
-better prediction recover rate as resolution increases.</div>
+crossings considerably, or removing the crossing entirely. What does generalize is the competition
+itself: at coarse resolution, dither pays an entropy cost for the quiet-zone detail it preserves; as
+resolution increases, synchronized dither and de-dithered history let accurate predictions once
+again produce small residuals that the entropy coder represents in fewer bits, and that benefit
+gradually cancels the cost.</div>
 
 <p>At coarse resolution, undithered coding is cheaper because it turns quiet regions into long runs of
-zeros. After the first crossover, de-dithered reconstructions can improve prediction enough that the
-dithered stream becomes <em>smaller</em>, even though it retains more information.</p>
-
-<p>At higher bit depths the curves remain close. Which one is slightly lower depends mostly on the
+zeros. Where the curves cross, the dithered stream is momentarily the <em>smaller</em> one even
+though it retains more information. At higher bit depths the curves remain close. Which one is slightly
+lower depends mostly on the
 incidental alignment between the signal and the quantization grid. Moving the gain slider can reverse
 the ordering, showing that the two costs have effectively converged.</p>
-
-<h3>Why the two costs converge</h3>
 
 <p>As <span class="m">&Delta;</span> gets smaller, the predictor's ordinary error spans many increasingly
 fine quantization steps. The small change caused by randomized rounding then becomes tiny compared
@@ -705,10 +715,10 @@ of the same continuous prediction-error distribution, so their compression costs
 are very close, small details such as signal alignment and finite sample count can decide which curve
 is slightly lower.</p>
 
-<div class="note">Subtraction removes the added dither energy itself, but it cannot undo the rounding
-that happened while the dither was present. The remaining rounding noise is carried in past
+<div class="note">Subtraction removes the added dither energy itself, but it cannot undo the rounding. 
+The remaining rounding noise is carried in past
 reconstructions and therefore enters later predictions. That is why a small difference can remain at
-finite resolution and why the two curves converge rather than coincide.</div>
+finite resolution and why the two curves eventually converge and sometimes even trade places.</div>
 
 <!-- =============================================================== -->
 <h2><span class="num">SECTION 8</span>From toy to implementation: the loop must be bit-exact</h2>
@@ -769,8 +779,8 @@ Prediction accuracy once again determines residual sparsity rather than the inci
 <p>A genuine rate tradeoff remains at coarse resolution. Dither preserves sub-LSB detail in quiet regions
 that undithered quantization would collapse to zero, so the added information can initially cost bits.
 As resolution and prediction quality improve, that quiet-zone penalty shrinks and the benefits of
-cleaner reconstructed history can offset it. The exact entropy curves and crossover points depend on
-the signal and predictor: these causal 1D toys illustrate the mechanisms, while stronger non-causal
+cleaner reconstructed history can offset it. The exact entropy curves, and whether or where the
+curves cross, depend on the signal and predictor: these causal 1D toys illustrate the mechanisms, while stronger non-causal
 and higher-dimensional predictors will produce different numerical results.</p>
 
 <footer>
