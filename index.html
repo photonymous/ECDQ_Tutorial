@@ -100,6 +100,7 @@ footer a{color:var(--dim)}
 
 .diagram-scroll{overflow-x:auto;overscroll-behavior-inline:contain}
 .mobile-hint{display:none;color:var(--faint);font:10.5px/1.4 var(--mono);margin:0 0 6px}
+.diagram-sub{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:12px 0 4px}
 @media (max-width:600px){
   .wrap{padding-left:14px;padding-right:14px}
   header{padding-top:42px}
@@ -108,7 +109,7 @@ footer a{color:var(--dim)}
   .ctls{gap:10px 14px}
   .ctl{min-width:0;max-width:100%;flex-wrap:wrap}
   .ctl select{max-width:100%}
-  #d6svg{min-width:760px}
+  #d6svgE,#d6svgD{min-width:760px}
   .mobile-hint{display:block}
 }
 </style>
@@ -431,15 +432,16 @@ consistent predictor input and often reduces <span class="m">|x - p|</span>, whi
 number of nonzero residuals. ECDQ therefore has two parts:</p>
 
 <ul>
-<li><b>Inject:</b> add <span class="m">d[n]</span> before rounding the prediction. This aligns the
-thresholds and removes the synchronization penalty.</li>
+<li><b>Dither injection:</b> add the dither <span class="m">d[n]</span> before rounding the
+prediction, just as it is added before rounding the true sample. This aligns the thresholds and
+removes the synchronization penalty.</li>
 <li><b>De-dither:</b> predict from <span class="m">(q - d)&middot;&Delta;</span> rather than
 <span class="m">q&middot;&Delta;</span>. This improves the prediction and can eventually make the dithered
 stream smaller than the undithered one.</li>
 </ul>
 
 <p>These are often described as separate refinements, but some predictors get no benefit from
-injection unless de-dithering is also enabled.</p>
+dither injection unless de-dithering is also enabled.</p>
 
 <!-- =============================================================== -->
 <h2><span class="num">SECTION 6</span>A causal 1D toy prediction loop</h2>
@@ -478,7 +480,7 @@ each node show the values at the current sample.</p>
       <span><i style="background:var(--violet);width:2px;height:13px;opacity:.7"></i>current sample n</span>
     </div>
     <div class="legend" style="margin-top:6px">
-      <span><i style="background:var(--ink);width:5px;height:5px;border-radius:50%"></i>quantized code q</span>
+      <span><i style="background:var(--ink);width:5px;height:5px;border-radius:50%"></i>quantized sample q</span>
       <span><i style="width:8px;height:8px;border:2px solid var(--violet);background:transparent;border-radius:1px"></i>prediction p</span>
       <span><i style="width:8px;height:8px;border:1.5px solid var(--violet);background:transparent;border-radius:50%"></i>predictor inputs</span>
       <span><i style="background:var(--blue);width:7px;height:7px;border-radius:50%"></i>true x at n</span>
@@ -499,24 +501,35 @@ each node show the values at the current sample.</p>
   <div class="fig-head"><span class="tag">FIG 7</span><span class="ttl">The ECDQ prediction loop</span></div>
   <div class="fig-body">
     <div class="ctls">
+      <label class="chk"><input type="checkbox" id="d6-dither2" checked> subtractive dither on</label>
+      <label class="chk" id="d6-dd-l2"><input type="checkbox" id="d6-dedither2" checked> de-dither before predicting</label>
+      <label class="chk" id="d6-in-l2"><input type="checkbox" id="d6-inject2" checked> inject d[n] into prediction rounding</label>
+    </div>
+    <div class="ctls">
       <div class="ctl"><label>sample n</label><input type="range" id="d6-n2" min="0" max="1023" step="1" value="200"><output id="d6-n2-o"></output></div>
     </div>
-    <div class="note" style="margin:8px 0 4px">This figure is synchronized with Fig 6: both sample
-    sliders move the same cursor, Fig 6's ECDQ toggles reshape this diagram, and the numbers beneath
-    the nodes are the loop's values at that sample of Fig 6's signal.</div>
+    <div class="note" style="margin:8px 0 4px">This figure is synchronized with Fig 6: the ECDQ
+    toggles and sample sliders here are linked to the ones there, and the numbers beneath the nodes
+    are the loop's values at that sample of Fig 6's signal.</div>
     <div class="mobile-hint">Swipe horizontally to follow the complete loop.</div>
-    <div class="diagram-scroll"><svg class="diagram" id="d6svg" viewBox="0 0 920 372" aria-label="ECDQ prediction loop block diagram"></svg></div>
-    <div class="note" style="margin-top:4px">Amber marks the three places the shared dither value
-    <span class="m">d[n]</span> is consumed. It is never stored or transmitted; both sides regenerate it
-    from the index and an agreed seed. Green marks the two ECDQ modifications.</div>
+    <div class="diagram-sub">Encoder</div>
+    <div class="diagram-scroll"><svg class="diagram" id="d6svgE" viewBox="0 24 920 274" aria-label="ECDQ encoder block diagram"></svg></div>
+    <div class="diagram-sub">Decoder</div>
+    <div class="diagram-scroll"><svg class="diagram" id="d6svgD" viewBox="0 88 920 224" aria-label="ECDQ decoder block diagram"></svg></div>
+    <div class="note" style="margin-top:4px">The predictor row, residual, and reconstruction row are
+    drawn identically and at the same positions in both diagrams because they <em>are</em> identical:
+    the encoder contains a full copy of the decoder, so both sides rebuild the same
+    <span class="m">y[n]</span> from the same residuals. Amber marks every place the shared dither
+    value <span class="m">d[n]</span> is consumed. It is never stored or transmitted; both sides
+    regenerate it from the index and an agreed seed. Green marks the two ECDQ modifications.</div>
     <dl class="symdefs">
       <dt>x[n]</dt><dd>the true input sample at index <span class="m">n</span>. Only the encoder ever sees it.</dd>
       <dt>&Delta;</dt><dd>the quantizer step size, one LSB at the chosen bit depth. Values shown beneath the nodes are in units of &Delta;.</dd>
       <dt>d[n]</dt><dd>the subtractive dither for sample <span class="m">n</span>: a pseudorandom offset in [&minus;&frac12;, &frac12;) LSB from <span class="m">PRNG(seed, n)</span>, regenerated identically on both sides.</dd>
-      <dt>round</dt><dd>rounding to the nearest integer, i.e. quantization to the nearest code.</dd>
-      <dt>q[n]</dt><dd>the quantized code of the true sample: <span class="m">round(x/&Delta; + d)</span>.</dd>
+      <dt>round</dt><dd>rounding to the nearest integer, i.e. quantization to the nearest level.</dd>
+      <dt>q[n]</dt><dd>true sample n, quantized: <span class="m">round(x/&Delta; + d)</span>.</dd>
       <dt>p</dt><dd>the prediction of <span class="m">x[n]</span>, computed from the history of past reconstructions <span class="m">y[]</span>.</dd>
-      <dt>p_q</dt><dd>the prediction, quantized: <span class="m">round(p/&Delta; + d)</span> with injection on, <span class="m">round(p/&Delta;)</span> without.</dd>
+      <dt>p_q</dt><dd>the prediction, quantized: <span class="m">round(p/&Delta; + d)</span> with dither injection on, <span class="m">round(p/&Delta;)</span> without.</dd>
       <dt>r[n]</dt><dd>the residual <span class="m">q[n] &minus; p_q</span>: the only value stored or transmitted.</dd>
       <dt>y[n]</dt><dd>the reconstruction: <span class="m">(q[n] &minus; d[n])&middot;&Delta;</span> with de-dithering on, <span class="m">q[n]&middot;&Delta;</span> without. It feeds the shared history for future predictions.</dd>
     </dl>
@@ -548,24 +561,24 @@ options change.</p>
 
 <p>With the default four-tap predictor, naive dither has the highest entropy. De-dithering alone helps
 very little: it gives the predictor a more accurate input, but the result is still rounded against the
-wrong thresholds. Injection alone recovers most of the loss. Using both options brings ECDQ close to
+wrong thresholds. Dither injection alone recovers most of the loss. Using both options brings ECDQ close to
 the no-dither baseline while retaining the signal-quality benefits from Section 2.</p>
 
 <h3>The two halves are not independent</h3>
 
 <p>Change the predictor in Fig 6 to <b>previous sample</b>. The naive, de-dither-only, and
-inject-only bars become <em>exactly</em> equal. This result follows from the arithmetic rather than a
+inject-d[n]-only bars become <em>exactly</em> equal. This result follows from the arithmetic rather than a
 rendering error.</p>
 
 <p>A single-tap predictor reading reconstructions that have not been de-dithered computes
 <span class="m">p = y[n-1] = q[n-1]&middot;&Delta;</span>. Divide by <span class="m">&Delta;</span> and
 that is an <em>exact integer</em>. Adding a dither of magnitude below half a step to an integer and
-rounding returns the same integer. Injection therefore has no effect.</p>
+rounding returns the same integer. Injecting the dither therefore has no effect.</p>
 
-<div class="key"><b>Injection can only help when the prediction lands between levels.</b> What puts it
+<div class="key"><b>Dither injection can only help when the prediction lands between levels.</b> What puts it
 between levels is de-dithering, which turns integer reconstructions into real valued ones. In the 4 tap
-case averaging four integers does some of that work too, which is why injection alone already helps
-there. The two ECDQ options are therefore coupled: injection aligns thresholds, while de-dithering
+case averaging four integers does some of that work too, which is why dither injection alone already helps
+there. The two ECDQ options are therefore coupled: dither injection aligns thresholds, while de-dithering
 allows the prediction to fall between quantization levels.</div>
 
 <p>The four-tap linear extrapolator fits a straight line to
@@ -573,8 +586,8 @@ allows the prediction to fall between quantization levels.</div>
 weights are equivalent to
 <span class="m">p = -0.5y[n-4] + 0.5y[n-2] + y[n-1]</span>; the coefficient of
 <span class="m">y[n-3]</span> cancels after the fit. Because these weights are fractional, the
-prediction can land between levels even without de-dithering, so injection alone can help. Using both
-options still gives the complete ECDQ loop: de-dithering removes past offsets and injection aligns the
+prediction can land between levels even without de-dithering, so dither injection alone can help. Using both
+options still gives the complete ECDQ loop: de-dithering removes past offsets and dither injection aligns the
 current rounding thresholds.</p>
 
 <!-- =============================================================== -->
@@ -1261,6 +1274,7 @@ function fft(re, im){
   var els={
     bits:$('d6-bits'), gain:$('d6-gain'), pred:$('d6-pred'), n:$('d6-n'), n2:$('d6-n2'),
     bits2:$('d8-bits'), gain2:$('d8-gain'), pred2:$('d8-pred'),
+    dither2:$('d6-dither2'), dedither2:$('d6-dedither2'), inject2:$('d6-inject2'),
     dither:$('d6-dither'), dedither:$('d6-dedither'), inject:$('d6-inject')
   };
   var state={ x:null, run:null, bars:null, step:0, quiet:0, Hnd:0 };
@@ -1282,14 +1296,15 @@ function fft(re, im){
     return t;
   }
 
-  /* ---- block diagram ---- */
-  var svg=$('d6svg');
+  /* ---- block diagrams: encoder and decoder, sharing geometry ---- */
+  var svgE=$('d6svgE'), svgD=$('d6svgD');
   var SVGNS='http://www.w3.org/2000/svg';
   var nodes={};
+  var curSvg=svgE, curMark='ahE';
   function el(tag,attrs,parent){
     var e=document.createElementNS(SVGNS,tag), k;
     for(k in attrs) e.setAttribute(k,attrs[k]);
-    (parent||svg).appendChild(e); return e;
+    (parent||curSvg).appendChild(e); return e;
   }
   function box(x,y,w,h,label,id,accent){
     var g=el('g',{});
@@ -1313,7 +1328,7 @@ function fft(re, im){
   function arrow(pts,color,dash){
     var dstr='M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L');
     el('path',{d:dstr,fill:'none',stroke:color||C.faint,'stroke-width':1.4,
-      'marker-end':'url(#ah)','stroke-dasharray':dash||''});
+      'marker-end':'url(#'+curMark+')','stroke-dasharray':dash||''});
   }
   function tag(x,y,s,color,size,anchor){
     var t=el('text',{x:x,y:y,'font-size':size||11,fill:color||C.faint,
@@ -1321,65 +1336,78 @@ function fft(re, im){
     t.textContent=s; return t;
   }
   var dTags={};
-  (function buildDiagram(){
+  function defsFor(id){
     var defs=el('defs',{});
-    var mk=el('marker',{id:'ah',viewBox:'0 0 10 10',refX:9,refY:5,
+    var mk=el('marker',{id:id,viewBox:'0 0 10 10',refX:9,refY:5,
       markerWidth:6,markerHeight:6,orient:'auto-start-reverse'},defs);
     el('path',{d:'M0 0 L10 5 L0 10 z',fill:C.faint},mk);
+  }
+  /* everything the encoder and decoder have in common, drawn once per side
+     with identical geometry so the redundancy is visually obvious */
+  function drawShared(S,rTag){
+    // predictor row
+    box(20,168,124,44,'history y[]','hist'+S);
+    arrow([[144,190],[176,190]]);
+    box(176,168,92,44,'predict','pred'+S);
+    arrow([[268,190],[300,190]]);
+    circ(318,190,'+','plus2'+S,C.green);
+    arrow([[336,190],[356,190]]);
+    box(356,168,124,44,'round','rnd2'+S);   // wide enough for 'round(p/Δ+d)'
+    arrow([[480,190],[506,190]]);
+    box(506,168,80,44,'p_q','pq'+S);
+    dTags['pred'+S]=tag(318,236,'d[n]',C.amber,11,'middle');
+    dTags['pred'+S+'Arrow']=el('path',{d:'M318 224 L318 208',stroke:C.amber,'stroke-width':1.3,
+      'marker-end':'url(#'+curMark+')',fill:'none'});
+    tag(20,154,'identical in encoder and decoder',C.faint,10.5);
 
-    // row 1: encoder
+    // residual
+    box(694,106,206,44,'r[n]  residual','r'+S,C.violet);
+    tag(694,96,rTag,C.violet,10.5);
+
+    // reconstruction row
+    arrow([[797,150],[797,236]]);
+    box(694,236,206,44,'q[n] = p_q + r[n]','qhat'+S);
+    arrow([[694,258],[652,258]]);
+    circ(634,258,'−','minus2'+S,C.green);
+    arrow([[616,258],[578,258]]);
+    box(392,236,186,44,'y[n] = (q[n]-d[n])·Δ','y'+S,C.green);
+    dTags['rec'+S]=tag(634,224,'d[n]',C.amber,11,'middle');
+    dTags['rec'+S+'Arrow']=el('path',{d:'M634 228 L634 240',stroke:C.amber,'stroke-width':1.3,
+      'marker-end':'url(#'+curMark+')',fill:'none'});
+    // feedback into history; caption kept left of the y[n] box, wrapped
+    arrow([[392,258],[82,258],[82,214]]);
+    tag(96,276,'feedback: predictions use',C.faint,10.5);
+    tag(96,290,'only reconstructed samples',C.faint,10.5);
+  }
+  (function buildDiagrams(){
+    /* encoder */
+    curSvg=svgE; curMark='ahE'; defsFor('ahE');
     box(20,50,104,44,'x[n]','x',C.blue);
     arrow([[124,72],[160,72]]);
     circ(178,72,'+','plus1',C.amber);
     arrow([[196,72],[228,72]]);
-    box(228,50,86,44,'round','rnd1');
-    arrow([[314,72],[348,72]]);
-    box(348,50,86,44,'q[n]','q');
+    box(228,50,124,44,'round','rnd1');   // wide enough for 'round(x/Δ+d)'
+    arrow([[352,72],[386,72]]);
+    box(386,50,86,44,'q[n]','q');
     // dither enters from below, clear of the row caption
     dTags.enc=tag(178,120,'d[n]',C.amber,11,'middle');
     dTags.encArrow=el('path',{d:'M178 108 L178 90',stroke:C.amber,'stroke-width':1.3,
-      'marker-end':'url(#ah)',fill:'none'});
+      'marker-end':'url(#ahE)',fill:'none'});
     tag(20,36,'encoder only: the true sample',C.faint,10.5);
-
-    // row 2: predictor (shared by encoder and decoder)
-    box(20,168,124,44,'history y[]','hist');
-    arrow([[144,190],[176,190]]);
-    box(176,168,92,44,'predict','pred');
-    arrow([[268,190],[300,190]]);
-    circ(318,190,'+','plus2',C.green);
-    arrow([[336,190],[356,190]]);
-    box(356,168,124,44,'round','rnd2');   // wide enough for 'round(p/Δ+d)'
-    arrow([[480,190],[506,190]]);
-    box(506,168,80,44,'p_q','pq');
-    dTags.pred=tag(318,236,'d[n]',C.amber,11,'middle');
-    dTags.predArrow=el('path',{d:'M318 224 L318 208',stroke:C.amber,'stroke-width':1.3,
-      'marker-end':'url(#ah)',fill:'none'});
-    tag(20,154,'shared by encoder and decoder',C.faint,10.5);
-
     // converge to residual
-    arrow([[434,72],[640,72],[640,110]]);
+    arrow([[472,72],[640,72],[640,110]]);
     arrow([[586,190],[640,190],[640,146]]);
     circ(640,128,'−','minus',C.edge);
     arrow([[658,128],[694,128]]);
-    box(694,106,206,44,'r[n]  residual','r',C.violet);
-    tag(694,96,'the only thing stored',C.violet,10.5);
+    drawShared('E','the only thing stored');
 
-    // reconstruct row
-    arrow([[797,150],[797,236]]);
-    box(694,236,206,44,'q[n] = p_q + r[n]','qhat');
-    arrow([[694,258],[652,258]]);
-    circ(634,258,'−','minus2',C.green);
-    arrow([[616,258],[578,258]]);
-    box(392,236,186,44,'y[n] = (q[n]-d[n])·Δ','y',C.green);
-    dTags.rec=tag(634,224,'d[n]',C.amber,11,'middle');
-    dTags.recArrow=el('path',{d:'M634 228 L634 240',stroke:C.amber,'stroke-width':1.3,
-      'marker-end':'url(#ah)',fill:'none'});
-    // feedback into history
-    arrow([[392,258],[82,258],[82,214]]);
-    tag(150,274,'feedback: the decoder has only this',C.faint,10.5);
-
-    tag(20,330,'decoder runs the identical loop; it just adds r[n] instead of subtracting it.',C.dim,11.5);
-    tag(20,352,'d[n] = PRNG(seed, n), regenerated on both sides, never transmitted.',C.amber,11.5);
+    /* decoder */
+    curSvg=svgD; curMark='ahD'; defsFor('ahD');
+    drawShared('D','received from the bitstream');
+    // p_q feeds the reconstruction directly (no subtraction on this side)
+    arrow([[586,190],[746,190],[746,232]]);
+    arrow([[485,280],[485,304]],C.green);
+    tag(497,300,'decoded output',C.green,10.5);
   })();
 
   function updateDiagram(){
@@ -1388,20 +1416,24 @@ function fft(re, im){
     nodes.plus1.circle.setAttribute('stroke', dith?C.amber:C.edge);
     nodes.plus1.circle.setAttribute('stroke-dasharray', dith?'':'3,3');
     nodes.plus1.label.setAttribute('fill', dith?C.amber:C.faint);
-    // prediction dither inject
-    nodes.plus2.circle.setAttribute('stroke', inj?C.green:C.edge);
-    nodes.plus2.circle.setAttribute('stroke-dasharray', inj?'':'3,3');
-    nodes.plus2.label.setAttribute('fill', inj?C.green:C.faint);
-    // reconstruct de-dither
-    nodes.minus2.circle.setAttribute('stroke', dd?C.green:C.edge);
-    nodes.minus2.circle.setAttribute('stroke-dasharray', dd?'':'3,3');
-    nodes.minus2.label.setAttribute('fill', dd?C.green:C.faint);
-    nodes.y.label.textContent = dd ? 'y[n] = (q[n]-d[n])·Δ' : 'y[n] = q[n]·Δ';
-    nodes.y.rect.setAttribute('stroke', dd?C.green:C.edge);
-    nodes.y.label.setAttribute('fill', dd?C.green:C.ink);
-    nodes.rnd2.label.textContent = inj ? 'round(p/Δ+d)' : 'round(p/Δ)';
+    nodes.rnd1.label.textContent = dith ? 'round(x/Δ+d)' : 'round(x/Δ)';
+    ['E','D'].forEach(function(S){
+      // prediction dither inject
+      var p2=nodes['plus2'+S], m2=nodes['minus2'+S], y=nodes['y'+S];
+      p2.circle.setAttribute('stroke', inj?C.green:C.edge);
+      p2.circle.setAttribute('stroke-dasharray', inj?'':'3,3');
+      p2.label.setAttribute('fill', inj?C.green:C.faint);
+      // reconstruct de-dither
+      m2.circle.setAttribute('stroke', dd?C.green:C.edge);
+      m2.circle.setAttribute('stroke-dasharray', dd?'':'3,3');
+      m2.label.setAttribute('fill', dd?C.green:C.faint);
+      y.label.textContent = dd ? 'y[n] = (q[n]-d[n])·Δ' : 'y[n] = q[n]·Δ';
+      y.rect.setAttribute('stroke', dd?C.green:C.edge);
+      y.label.setAttribute('fill', dd?C.green:C.ink);
+      nodes['rnd2'+S].label.textContent = inj ? 'round(p/Δ+d)' : 'round(p/Δ)';
+    });
     // the dither taps that are actually live
-    [['enc',dith],['pred',inj],['rec',dd]].forEach(function(t){
+    [['enc',dith],['predE',inj],['predD',inj],['recE',dd],['recD',dd]].forEach(function(t){
       dTags[t[0]].setAttribute('fill', t[1] ? C.amber : C.faint);
       var a=dTags[t[0]+'Arrow'];
       a.setAttribute('stroke', t[1] ? C.amber : C.faint);
@@ -1418,16 +1450,18 @@ function fft(re, im){
     var sd=(R.d[n]>=0?'+':'')+R.d[n].toFixed(3);
     nodes.x.val.textContent   = (state.x[n]/st).toFixed(2)+' Δ';
     nodes.q.val.textContent   = R.q[n];
-    nodes.pred.val.textContent= (R.p[n]/st).toFixed(2)+' Δ';
-    nodes.pq.val.textContent  = R.pq[n];
-    nodes.r.val.textContent   = (R.r[n]>0?'+':'')+R.r[n];
-    nodes.r.label.setAttribute('fill', R.r[n]===0?C.green:C.violet);
-    nodes.qhat.val.textContent= R.pq[n]+' + ('+((R.r[n]>0?'+':'')+R.r[n])+') = '+R.q[n];
-    nodes.y.val.textContent   = (R.y[n]/st).toFixed(2)+' Δ';
-    nodes.hist.val.textContent= PRED_LABEL[els.pred.value]||'';
-    dTags.enc.textContent  = 'd[n] = '+sd;
-    dTags.pred.textContent = 'd[n] = '+sd;
-    dTags.rec.textContent  = 'd[n] = '+sd;
+    dTags.enc.textContent     = 'd[n] = '+sd;
+    ['E','D'].forEach(function(S){
+      nodes['pred'+S].val.textContent= (R.p[n]/st).toFixed(2)+' Δ';
+      nodes['pq'+S].val.textContent  = R.pq[n];
+      nodes['r'+S].val.textContent   = (R.r[n]>0?'+':'')+R.r[n];
+      nodes['r'+S].label.setAttribute('fill', R.r[n]===0?C.green:C.violet);
+      nodes['qhat'+S].val.textContent= R.pq[n]+' + ('+((R.r[n]>0?'+':'')+R.r[n])+') = '+R.q[n];
+      nodes['y'+S].val.textContent   = (R.y[n]/st).toFixed(2)+' Δ';
+      nodes['hist'+S].val.textContent= PRED_LABEL[els.pred.value]||'';
+      dTags['pred'+S].textContent = 'd[n] = '+sd;
+      dTags['rec'+S].textContent  = 'd[n] = '+sd;
+    });
   }
 
   /* ---- recompute everything on settings change ---- */
@@ -1435,7 +1469,7 @@ function fft(re, im){
     {k:'nd',   name:'no dither',      o:{dither:false}},
     {k:'naive',name:'naive dither',   o:{dither:true, dedither:false, inject:false}},
     {k:'dd',   name:'de-dither only', o:{dither:true, dedither:true,  inject:false}},
-    {k:'inj',  name:'inject only',    o:{dither:true, dedither:false, inject:true}},
+    {k:'inj',  name:'inject d[n] only', o:{dither:true, dedither:false, inject:true}},
     {k:'ecdq', name:'ECDQ (both)',    o:{dither:true, dedither:true,  inject:true}}
   ];
   function currentKey(){
@@ -1472,6 +1506,12 @@ function fft(re, im){
     els.dedither.disabled=!on; els.inject.disabled=!on;
     $('d6-dd-l').className='chk'+(on?'':' off');
     $('d6-in-l').className='chk'+(on?'':' off');
+    // mirror the Fig 7 copies of the toggles
+    els.dither2.checked=on;
+    els.dedither2.checked=els.dedither.checked; els.inject2.checked=els.inject.checked;
+    els.dedither2.disabled=!on; els.inject2.disabled=!on;
+    $('d6-dd-l2').className='chk'+(on?'':' off');
+    $('d6-in-l2').className='chk'+(on?'':' off');
 
     var key=currentKey();
     var cur=state.bars.filter(function(b){return b.k===key;})[0];
@@ -1664,9 +1704,14 @@ function fft(re, im){
     els[k].addEventListener('input',recompute);
     els[k].addEventListener('change',recompute);
   });
-  /* Fig 8 copies write through to the Fig 6 originals, then recompute mirrors back */
+  /* Fig 7/8 copies write through to the Fig 6 originals, then recompute mirrors back */
   [['bits2','bits'],['gain2','gain'],['pred2','pred']].forEach(function(p){
     function sync(){ els[p[1]].value=els[p[0]].value; recompute(); }
+    els[p[0]].addEventListener('input',sync);
+    els[p[0]].addEventListener('change',sync);
+  });
+  [['dither2','dither'],['dedither2','dedither'],['inject2','inject']].forEach(function(p){
+    function sync(){ els[p[1]].checked=els[p[0]].checked; recompute(); }
     els[p[0]].addEventListener('input',sync);
     els[p[0]].addEventListener('change',sync);
   });
