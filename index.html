@@ -721,12 +721,12 @@ reconstructions and therefore enters later predictions. That is why a small diff
 finite resolution and why the two curves eventually converge and sometimes even trade places.</div>
 
 <!-- =============================================================== -->
-<h2><span class="num">SECTION 8</span>From toy to implementation: the loop must be bit-exact</h2>
+<h2><span class="num">SECTION 8</span>Implementation and bit-exactness</h2>
 
-<p>This tutorial writes the signal <span class="m">x[n]</span>, the dither <span class="m">d[n]</span>,
+<p>This tutorial treats the signal <span class="m">x[n]</span>, the dither <span class="m">d[n]</span>,
 and the reconstruction <span class="m">y[n]</span> as continuous quantities, which in code would
-ordinarily become floating-point numbers (<em>floats</em>), and that is the right way to
-understand the mechanisms. But it hides a practical requirement. In a closed prediction loop, the
+ordinarily become floating-point numbers. But this hides a practical requirement. In a closed 
+prediction loop, the
 predictor feeds on reconstructions, so the encoder and the decoder must compute <b>bit-identical</b>
 <span class="m">y[n]</span> values, on every sample, forever. If floating-point arithmetic on the two
 sides differs by even one unit in the last place (a different math library, a compiler that
@@ -738,30 +738,31 @@ This is the same class of failure this page attributes to naive dither, two roun
 operations falling out of agreement, except caused by the arithmetic itself.</p>
 
 <p>The remedy used by production lossless and near-lossless coders is to define every operation inside the
-loop over integers, where arithmetic is exact on every platform. Represent the input at a finer
+loop using integers, where arithmetic is exact on every platform. Represent the input at a finer
 integer scale: let <span class="m">X</span> be an integer at resolution
 <span class="m">&Delta;/2<sup>K</sup></span>, so <span class="m">K</span> extra bits stand in for
-the continuous value. Draw the dither as an integer
-<span class="m">u[n]</span> uniform on <span class="m">{0, &hellip;, 2<sup>K</sup>-1}</span> from an
+the continuous value. Sample each dither value as an integer
+<span class="m">u[n]</span> uniform on the range <span class="m">{0, &hellip;, 2<sup>K</sup>-1}</span>
+from an
 integer PRNG (the generator used by this page is already pure integer arithmetic). Dithered
 quantization then collapses to an add and a shift:</p>
 
 <div class="eq">q[n] = ( X[n] <span class="a">+ u[n]</span> ) &gt;&gt; K</div>
 
 <p>This is exactly <span class="m">round(x/&Delta; + d)</span> with
-<span class="m">d = (u + &frac12;)/2<sup>K</sup> - &frac12;</span>: a finite, uniform width-one
+<span class="m">d = (u + &frac12;)/2<sup>K</sup> - &frac12;</span>: a finite, uniform width-of-one
 dither, with no floating point anywhere. The reconstruction is kept as an integer at the same fine
 scale, <span class="m">Y[n] = q[n]&middot;2<sup>K</sup> - u[n]</span> plus a constant half-step
 offset, and is never converted to floating point inside the loop. The predictor is likewise defined
 over integer <span class="m">Y</span> with integer coefficients and a specified rounding rule for
 its divisions, which is how the predictors in formats such as FLAC and JPEG-LS are specified. Every
 quantity in the loop is then rigorously defined, and encoder&ndash;decoder agreement is guaranteed by
-construction rather than hoped for.</p>
+construction.</p>
 
 <p>The figures on this page are exempt from this concern only because their encoder and decoder are
 the same computation running in the same arithmetic engine, so they cannot disagree with themselves.
-Read the continuous-valued equations here as exact arithmetic; build them as integer arithmetic,
-not floats.</p>
+You may interpret the continuous-valued equations here as exact arithmetic; build them as integer 
+arithmetic, not as floats.</p>
 
 <h2><span class="num">SECTION 9</span>Summary</h2>
 
@@ -770,17 +771,21 @@ approximately additive, input-independent noise, provided the quantizer does not
 structured artifacts and preserves information below one quantization step, while keeping the error
 power bounded and predictable.</p>
 
-<p>In a predictive coder, applying dither only to the sample shifts its decision thresholds relative
-to those used for the prediction. Even an accurate predictor can then produce unnecessary nonzero
-residuals, increasing residual entropy. ECDQ avoids this mismatch by using the shared dither to
-synchronize both rounding operations and by forming predictions from de-dithered reconstructions.
-Prediction accuracy once again determines residual sparsity rather than the incidental dither value.</p>
+<p>In a predictive coder, applying dither to only the sample shifts the decision thresholds relative
+to the thresholds used for the prediction. Even an accurate predictor can then produce unnecessary nonzero
+residuals, increasing residual entropy. ECDQ avoids this mismatch by applying the same dither value
+to both rounding operations, so their thresholds move together. And because the decoder knows the
+dither sequence too, predictions on both sides can be based on de-dithered reconstructions.
+Prediction accuracy, not randomness, then determines the sparsity of the residual stream (and thus
+the entropy and compression rate).</p>
 
-<p>A genuine rate tradeoff remains at coarse resolution. Dither preserves sub-LSB detail in quiet regions
+<p>A genuine compression rate tradeoff remains at coarse resolution. Dither preserves sub-LSB information 
+in quiet regions
 that undithered quantization would collapse to zero, so the added information can initially cost bits.
 As resolution and prediction quality improve, that quiet-zone penalty shrinks and the benefits of
 cleaner reconstructed history can offset it. The exact entropy curves, and whether or where the
-curves cross, depend on the signal and predictor: these causal 1D toys illustrate the mechanisms, while stronger non-causal
+curves cross, depend on the signal and the predictor: these causal 1D toy prediction algorithms
+illustrate the mechanisms, while stronger non-causal
 and higher-dimensional predictors will produce different numerical results.</p>
 
 <footer>
